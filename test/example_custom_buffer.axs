@@ -16,7 +16,7 @@ async function runSimpleExample() {
   const outputBuffer = new AxFloat32Array(data.length);
   
   // 計算を実行（スレッド数を指定）
-  await dispatch(addVectors(inputABuffer, inputBBuffer, outputBuffer), data.length);
+  await AxRuntime.dispatch(addVectors(inputABuffer, inputBBuffer, outputBuffer), data.length);
   console.log('Result:', outputBuffer.array);
 }
 

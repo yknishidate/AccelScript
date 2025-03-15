@@ -34,7 +34,7 @@ async function runSimpleExample() {
   device.queue.writeBuffer(inputBBuffer, 0, data);
   
   // 計算を実行（自動生成されたラッパー関数を使用）
-  await dispatch(addVectors(inputABuffer, inputBBuffer, outputBuffer), 8);
+  await AxRuntime.dispatch(addVectors(inputABuffer, inputBBuffer, outputBuffer), 8);
   
   // 結果を表示
   const resultData = await AxRuntime.readBuffer(outputBuffer, data.byteLength);

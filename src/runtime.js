@@ -574,6 +574,51 @@ export class AxRuntime {
     
     return this.#pipelines.get(pipelineName);
   }
+
+  /**
+   * シェーダーをディスパッチする
+   * @param {Object} shaderInfo シェーダー情報
+   * @param {number|Array|Object} threadCount スレッド数または{width, height}オブジェクト
+   * @returns {Promise<void>}
+   */
+  static async dispatch(shaderInfo, threadCount) {
+    if (threadCount === undefined) {
+      throw new Error('threadCount must be specified');
+    }
+    
+    // threadCountの型に基づいて次元を判定
+    const is2D = (Array.isArray(threadCount) && threadCount.length === 2) || 
+                (typeof threadCount === 'object' && threadCount !== null && 
+                  'width' in threadCount && 'height' in threadCount);
+    
+    // 次元に応じたコードとパラメータを選択
+    const code = is2D ? shaderInfo.code2d : shaderInfo.code1d;
+    
+    // ユニフォームバッファのデータを準備
+    let uniformData;
+    if (is2D) {
+      // 2次元の場合
+      let width, height;
+      if (Array.isArray(threadCount)) {
+        [width, height] = threadCount;
+      } else {
+        width = threadCount.width;
+        height = threadCount.height;
+      }
+      uniformData = { width: width, height, is_2d: 1 };
+    } else {
+      // 1次元の場合
+      uniformData = { width: threadCount, height: 1, is_2d: 0 };
+    }
+    
+    return this.executeShader(
+      shaderInfo.name,
+      code,
+      [uniformData, ...shaderInfo.buffers],
+      shaderInfo.bufferTypes,
+      threadCount
+    );
+  }
   
   /**
    * シェーダーを実行する
