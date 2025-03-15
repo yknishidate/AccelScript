@@ -18,13 +18,13 @@ function addVectors(inputA: read<f32[]>, inputB: read<f32[]>, output: write<f32[
 
 async function runSimpleExample() {
   // 初期化
-  await JSS.init();
+  await AxRuntime.init();
   
   // GPUバッファを作成
   const data = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
-  const inputABuffer = new JSSFloat32Array(data);
-  const inputBBuffer = new JSSFloat32Array(data);
-  const outputBuffer = new JSSFloat32Array(data.length);
+  const inputABuffer = new AxFloat32Array(data);
+  const inputBBuffer = new AxFloat32Array(data);
+  const outputBuffer = new AxFloat32Array(data.length);
   
   // 計算を実行（スレッド数を指定）
   await dispatch(addVectors(inputABuffer, inputBBuffer, outputBuffer), data.length);
