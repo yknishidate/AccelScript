@@ -4,12 +4,7 @@
  */
 
 // @compute属性を持つ関数（WGSLのcompute shaderに変換される）
-// バッファのバインディングはWGSLコードに自動的に追加されます
-
-// 実際のWGSLコードでは以下のようなバインディングが必要です
-// @group(0) @binding(0) var<storage, read> inputA: array<f32>;
-// @group(0) @binding(1) var<storage, read> inputB: array<f32>;
-// @group(0) @binding(2) var<storage, read_write> output: array<f32>;
+// バッファの型情報を引数に指定することで、自動的にバインディングが生成されます
 
 // WebGPUを初期化して計算を実行する関数
 async function runComputation() {
@@ -158,20 +153,21 @@ if (typeof module !== 'undefined') {
 
 // Generated WGSL Shader Code
 const shaderCode = {
-  addVectors: `
-@group(0) @binding(0) var<storage, read> inputA: array<f32>;
+  addVectors: `@group(0) @binding(0) var<storage, read> inputA: array<f32>;
 @group(0) @binding(1) var<storage, read> inputB: array<f32>;
 @group(0) @binding(2) var<storage, read_write> output: array<f32>;
 
 @compute @workgroup_size(64)  // 一般的なワークグループサイズ（GPUによって最適値は異なる）
 fn addVectors(@builtin(global_invocation_id) global_id: vec3<u32>) {
-  // JavaScriptのindexパラメータをglobal_id.xにマッピング
+  // グローバルインボケーションIDからインデックスを取得
   let index = global_id.x;
   
   // インデックスが配列の範囲内かチェック（バッファオーバーランを防止）
-  if (index < arrayLength(&output)) {
+  // 最初のバッファがある場合、そのサイズをチェックに使用
+  if (index < arrayLength(&inputA)) {
     
   // 入力バッファからデータを読み取り
+  // indexはglobal_id.xから自動的に取得されます
   let a = inputA[index];
   let b = inputB[index];
   

@@ -47,39 +47,54 @@ function preprocess(source) {
 }
 
 /**
+ * バッファ型情報を解析する
+ * @param {string} paramStr パラメータ文字列（例: "inputA: read<f32[]>"）
+ * @returns {{name: string, access: string, type: string}} バッファ情報
+ */
+function parseBufferType(paramStr) {
+  // パラメータ文字列を解析（例: "inputA: read<f32[]>"）
+  const match = paramStr.match(/(\w+)\s*:\s*(read|write)<(\w+)(?:\[\])?>/);
+  if (!match) return null;
+  
+  const [, name, access, type] = match;
+  return { name, access, type };
+}
+
+/**
  * JavaScript関数をWGSLのcompute shaderに変換する
  * @param {{name: string, params: string[], body: string}} functionInfo 関数情報
  * @returns {string} WGSLコード
  */
 function convertToWGSL(functionInfo) {
-  // パラメータの型を推測（簡易的な実装）
-  // 配列のインデックスとして使用されるパラメータはu32に設定
-  const typedParams = functionInfo.params.map(param => {
-    // パラメータ名に'index'が含まれる場合はu32として扱う
-    if (param.toLowerCase().includes('index')) {
-      return `${param}: u32`;
+  // バッファパラメータを解析
+  const bufferParams = [];
+  for (const param of functionInfo.params) {
+    const bufferInfo = parseBufferType(param);
+    if (bufferInfo) {
+      bufferParams.push(bufferInfo);
     }
-    return `${param}: f32`;
-  });
+  }
   
-  // バッファのバインディングを追加
-  const bufferBindings = `
-@group(0) @binding(0) var<storage, read> inputA: array<f32>;
-@group(0) @binding(1) var<storage, read> inputB: array<f32>;
-@group(0) @binding(2) var<storage, read_write> output: array<f32>;
-`;
+  // バッファバインディングを生成
+  let bufferBindings = '';
+  for (let i = 0; i < bufferParams.length; i++) {
+    const { name, access, type } = bufferParams[i];
+    const storageAccess = access === 'read' ? 'read' : 'read_write';
+    bufferBindings += `@group(0) @binding(${i}) var<storage, ${storageAccess}> ${name}: array<${type}>;\n`;
+  }
   
   // WGSLコードを生成
   const wgslCode = `${bufferBindings}
 @compute @workgroup_size(64)  // 一般的なワークグループサイズ（GPUによって最適値は異なる）
 fn ${functionInfo.name}(@builtin(global_invocation_id) global_id: vec3<u32>) {
-  // JavaScriptのindexパラメータをglobal_id.xにマッピング
+  // グローバルインボケーションIDからインデックスを取得
   let index = global_id.x;
   
   // インデックスが配列の範囲内かチェック（バッファオーバーランを防止）
-  if (index < arrayLength(&output)) {
+  // 最初のバッファがある場合、そのサイズをチェックに使用
+  ${bufferParams.length > 0 ? `if (index < arrayLength(&${bufferParams[0].name})) {` : ''}
     ${functionInfo.body}
-  }
+  ${bufferParams.length > 0 ? '}' : ''}
 }
 `;
   

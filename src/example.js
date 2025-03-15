@@ -4,21 +4,17 @@
  */
 
 // @compute属性を持つ関数（WGSLのcompute shaderに変換される）
-// バッファのバインディングはWGSLコードに自動的に追加されます
+// バッファの型情報を引数に指定することで、自動的にバインディングが生成されます
 @compute
-function addVectors(index) {
+function addVectors(inputA: read<f32[]>, inputB: read<f32[]>, output: write<f32[]>) {
   // 入力バッファからデータを読み取り
+  // indexはglobal_id.xから自動的に取得されます
   let a = inputA[index];
   let b = inputB[index];
   
   // 計算結果を出力バッファに書き込み
   output[index] = a + b;
 }
-
-// 実際のWGSLコードでは以下のようなバインディングが必要です
-// @group(0) @binding(0) var<storage, read> inputA: array<f32>;
-// @group(0) @binding(1) var<storage, read> inputB: array<f32>;
-// @group(0) @binding(2) var<storage, read_write> output: array<f32>;
 
 // WebGPUを初期化して計算を実行する関数
 async function runComputation() {
