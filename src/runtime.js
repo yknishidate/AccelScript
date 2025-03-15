@@ -114,7 +114,7 @@ export class JSS {
    * @param {Array<string>} bufferTypes バッファタイプの配列（'read-only-storage' または 'storage'）
    * @returns {Promise<void>}
    */
-  static async executeShader(name, code, buffers, bufferTypes) {
+  static async executeShader(name, code, buffers, bufferTypes, threadCount) {
     const device = this.getDevice();
     
     // シェーダーモジュールを取得
@@ -147,10 +147,7 @@ export class JSS {
     // ワークグループ数を計算（ワークグループサイズ64に合わせて調整）
     // 最初のバッファのサイズを基準にする
     const workgroupSize = 64;
-    const bufferSize = buffers[0].size;
-    const elementSize = 4; // Float32 = 4 bytes
-    const elementCount = bufferSize / elementSize;
-    const workgroupCount = Math.ceil(elementCount / workgroupSize);
+    const workgroupCount = Math.ceil(threadCount / workgroupSize);
     
     computePass.dispatchWorkgroups(workgroupCount);
     computePass.end();

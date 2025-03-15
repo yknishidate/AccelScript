@@ -118,12 +118,36 @@ function generateWrapperFunction(funcName, bufferParams) {
   
   return `
 // WebGPUラッパー関数
-async function ${funcName}(${paramNames.join(', ')}) {
+function ${funcName}(${paramNames.join(', ')}) {
   // バッファタイプの配列
   const bufferTypes = [${bufferTypes.map(type => `'${type}'`).join(', ')}];
   
-  // シェーダーを実行
-  return JSS.executeShader('${funcName}', shaderCode.${funcName}, [${paramNames.join(', ')}], bufferTypes);
+  // シェーダー情報を返す（実行はしない）
+  return {
+    name: '${funcName}',
+    code: shaderCode.${funcName},
+    buffers: [${paramNames.join(', ')}],
+    bufferTypes: bufferTypes
+  };
+}
+`;
+}
+
+function generateDispatchFunction() {
+  return `
+// グローバルなdispatch関数
+async function dispatch(shaderInfo, threadCount) {
+  if (threadCount === undefined) {
+    throw new Error('threadCount must be specified');
+  }
+  
+  return JSS.executeShader(
+    shaderInfo.name,
+    shaderInfo.code,
+    shaderInfo.buffers,
+    shaderInfo.bufferTypes,
+    threadCount
+  );
 }
 `;
 }
@@ -182,6 +206,9 @@ function transpile(source) {
     // ラッパー関数を追加
     result += '\n\n// JSS WebGPU Wrapper Functions\n';
     result += wrapperFunctions.join('\n');
+
+    // dispatch関数を追加
+    result += '\n\n' + generateDispatchFunction();
     
     // シェーダーコードを追加
     result += '\n\n// Generated WGSL Shader Code\n';
