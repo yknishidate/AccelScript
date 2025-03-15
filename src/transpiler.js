@@ -163,7 +163,7 @@ async function dispatch(shaderInfo, threadCount) {
   }
   
   // threadCountの型に基づいて次元を判定
-  const is2D = Array.isArray(threadCount) || 
+  const is2D = (Array.isArray(threadCount) && threadCount.length === 2) || 
                (typeof threadCount === 'object' && threadCount !== null && 
                 'width' in threadCount && 'height' in threadCount);
   
