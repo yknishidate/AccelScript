@@ -16,22 +16,17 @@ function addVectors(inputA: read<f32[]>, inputB: read<f32[]>, output: write<f32[
   output[index] = a + b;
 }
 
-// WebGPUを初期化して計算を実行する関数
-async function runComputation() {
-  // WebGPUアダプタとデバイスを取得
-  if (!navigator.gpu) {
-    throw new Error('WebGPU is not supported in this browser');
-  }
-  
-  const adapter = await navigator.gpu.requestAdapter();
-  if (!adapter) {
-    throw new Error('Failed to get GPU adapter');
-  }
-  
-  const device = await adapter.requestDevice();
+// 新しいシンプルな使用例
+async function runSimpleExample() {
+  // WebGPUを初期化
+  await initJSS();
   
   // 入力データを準備
   const data = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
+  
+  // GPUバッファを作成
+  const device = globalThis.__JSS_DEVICE__;
+  
   const inputABuffer = device.createBuffer({
     size: data.byteLength,
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
@@ -47,105 +42,27 @@ async function runComputation() {
     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
   });
   
+  // 入力データをGPUバッファにコピー
+  device.queue.writeBuffer(inputABuffer, 0, data);
+  device.queue.writeBuffer(inputBBuffer, 0, data);
+  
+  // 計算を実行（自動生成されたラッパー関数を使用）
+  await addVectors(inputABuffer, inputBBuffer, outputBuffer);
+  
+  // 結果を読み取るためのステージングバッファを作成
   const stagingBuffer = device.createBuffer({
     size: data.byteLength,
     usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
   });
   
-  // 入力データをGPUバッファにコピー
-  device.queue.writeBuffer(inputABuffer, 0, data);
-  device.queue.writeBuffer(inputBBuffer, 0, data);
-  
-  // シェーダーモジュールを作成
-  const shaderModule = device.createShaderModule({
-    code: shaderCode.addVectors,
-  });
-  
-  // バインドグループレイアウトとパイプラインレイアウトを作成
-  const bindGroupLayout = device.createBindGroupLayout({
-    entries: [
-      {
-        binding: 0,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: { type: 'read-only-storage' }
-      },
-      {
-        binding: 1,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: { type: 'read-only-storage' }
-      },
-      {
-        binding: 2,
-        visibility: GPUShaderStage.COMPUTE,
-        buffer: { type: 'storage' }
-      }
-    ]
-  });
-  
-  const pipelineLayout = device.createPipelineLayout({
-    bindGroupLayouts: [bindGroupLayout]
-  });
-  
-  // コンピュートパイプラインを作成
-  const computePipeline = device.createComputePipeline({
-    layout: pipelineLayout,
-    compute: {
-      module: shaderModule,
-      entryPoint: 'addVectors'
-    }
-  });
-  
-  // バインドグループを作成
-  const bindGroup = device.createBindGroup({
-    layout: bindGroupLayout,
-    entries: [
-      {
-        binding: 0,
-        resource: {
-          buffer: inputABuffer
-        }
-      },
-      {
-        binding: 1,
-        resource: {
-          buffer: inputBBuffer
-        }
-      },
-      {
-        binding: 2,
-        resource: {
-          buffer: outputBuffer
-        }
-      }
-    ]
-  });
-  
-  // コマンドエンコーダを作成
-  const commandEncoder = device.createCommandEncoder();
-  
-  // コンピュートパスを作成
-  const computePass = commandEncoder.beginComputePass();
-  computePass.setPipeline(computePipeline);
-  computePass.setBindGroup(0, bindGroup);
-  
-  // ワークグループ数を計算（ワークグループサイズ64に合わせて調整）
-  // Math.ceilを使用して、すべての要素が処理されるようにする
-  const workgroupSize = 64;
-  const workgroupCount = Math.ceil(data.length / workgroupSize);
-  computePass.dispatchWorkgroups(workgroupCount);
-  
-  computePass.end();
-  
   // 結果をステージングバッファにコピー
+  const commandEncoder = device.createCommandEncoder();
   commandEncoder.copyBufferToBuffer(
     outputBuffer, 0,
     stagingBuffer, 0,
     data.byteLength
   );
-  
-  // コマンドをキューに送信
-  const commands = commandEncoder.finish();
-  device.queue.submit([commands]);
+  device.queue.submit([commandEncoder.finish()]);
   
   // 結果を読み取り
   await stagingBuffer.mapAsync(GPUMapMode.READ);
@@ -163,11 +80,11 @@ async function runComputation() {
 // 計算を実行
 if (typeof window !== 'undefined') {
   window.addEventListener('load', () => {
-    runComputation().catch(console.error);
+    runSimpleExample().catch(console.error);
   });
 }
 
 // Node.jsでの実行用（WebGPUがサポートされていない場合はスキップ）
 if (typeof module !== 'undefined') {
-  module.exports = { runComputation };
+  module.exports = { runSimpleExample };
 }

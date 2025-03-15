@@ -102,6 +102,131 @@ fn ${functionInfo.name}(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 /**
+ * ラッパー関数を生成する
+ * @param {string} funcName 関数名
+ * @param {Array<{name: string, access: string, type: string}>} bufferParams バッファパラメータ
+ * @returns {string} ラッパー関数のコード
+ */
+function generateWrapperFunction(funcName, bufferParams) {
+  // バッファパラメータの名前を取得
+  const paramNames = bufferParams.map(param => param.name);
+  
+  return `
+// WebGPUラッパー関数
+async function ${funcName}(${paramNames.join(', ')}) {
+  // グローバルデバイスが初期化されているか確認
+  if (!globalThis.__JSS_DEVICE__) {
+    throw new Error('WebGPU device not initialized. Call initJSS() first.');
+  }
+  const device = globalThis.__JSS_DEVICE__;
+  
+  // 関数固有のリソースを初期化
+  if (!${funcName}.__resources__) {
+    // シェーダーモジュールを作成
+    const shaderModule = device.createShaderModule({
+      code: shaderCode.${funcName}
+    });
+    
+    // バインドグループレイアウトを作成
+    const bindGroupLayout = device.createBindGroupLayout({
+      entries: [
+        ${bufferParams.map((param, i) => `{
+          binding: ${i},
+          visibility: GPUShaderStage.COMPUTE,
+          buffer: { type: '${param.access === 'read' ? 'read-only-storage' : 'storage'}' }
+        }`).join(',\n        ')}
+      ]
+    });
+    
+    // パイプラインレイアウトを作成
+    const pipelineLayout = device.createPipelineLayout({
+      bindGroupLayouts: [bindGroupLayout]
+    });
+    
+    // コンピュートパイプラインを作成
+    const pipeline = device.createComputePipeline({
+      layout: pipelineLayout,
+      compute: {
+        module: shaderModule,
+        entryPoint: '${funcName}'
+      }
+    });
+    
+    // リソースを保存
+    ${funcName}.__resources__ = {
+      bindGroupLayout,
+      pipeline
+    };
+  }
+  
+  // バインドグループを作成
+  const bindGroup = device.createBindGroup({
+    layout: ${funcName}.__resources__.bindGroupLayout,
+    entries: [
+      ${bufferParams.map((param, i) => `{
+        binding: ${i},
+        resource: {
+          buffer: ${param.name}
+        }
+      }`).join(',\n      ')}
+    ]
+  });
+  
+  // コマンドエンコーダを作成
+  const commandEncoder = device.createCommandEncoder();
+  
+  // コンピュートパスを作成
+  const computePass = commandEncoder.beginComputePass();
+  computePass.setPipeline(${funcName}.__resources__.pipeline);
+  computePass.setBindGroup(0, bindGroup);
+  
+  // ワークグループ数を計算（ワークグループサイズ64に合わせて調整）
+  // 最初のバッファのサイズを基準にする
+  const workgroupSize = 64;
+  const bufferSize = ${bufferParams.length > 0 ? `${bufferParams[0].name}.size` : '0'};
+  const elementSize = ${bufferParams.length > 0 ? `${bufferParams[0].name}.constructor.BYTES_PER_ELEMENT || 4` : '4'};
+  const elementCount = bufferSize / elementSize;
+  const workgroupCount = Math.ceil(elementCount / workgroupSize);
+  
+  computePass.dispatchWorkgroups(workgroupCount);
+  computePass.end();
+  
+  // コマンドをキューに送信
+  const commands = commandEncoder.finish();
+  device.queue.submit([commands]);
+  
+  // 処理完了を待機（非同期）
+  return Promise.resolve();
+}
+`;
+}
+
+/**
+ * WebGPU初期化関数を生成する
+ * @returns {string} 初期化関数のコード
+ */
+function generateInitFunction() {
+  return `
+// WebGPU初期化関数
+async function initJSS() {
+  if (!navigator.gpu) {
+    throw new Error('WebGPU is not supported in this browser');
+  }
+  
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) {
+    throw new Error('Failed to get GPU adapter');
+  }
+  
+  const device = await adapter.requestDevice();
+  globalThis.__JSS_DEVICE__ = device;
+  
+  return device;
+}
+`;
+}
+
+/**
  * ソースコードを変換し、@compute関数をWGSLに変換してJSに埋め込む
  * @param {string} source JavaScriptのソースコード
  * @returns {string} 変換後のJavaScriptコード
@@ -120,12 +245,36 @@ function transpile(source) {
   
   // 4. 各@compute関数をWGSLに変換
   const wgslShaders = {};
+  const wrapperFunctions = [];
+  
   for (const funcInfo of computeFunctions) {
+    // WGSLコードを生成
     wgslShaders[funcInfo.name] = convertToWGSL(funcInfo);
+    
+    // バッファパラメータを解析
+    const bufferParams = [];
+    for (const param of funcInfo.params) {
+      const bufferInfo = parseBufferType(param);
+      if (bufferInfo) {
+        bufferParams.push(bufferInfo);
+      }
+    }
+    
+    // ラッパー関数を生成
+    wrapperFunctions.push(generateWrapperFunction(funcInfo.name, bufferParams));
   }
   
   // 5. シェーダーコードをJSに埋め込む
   if (Object.keys(wgslShaders).length > 0) {
+    // 初期化関数を追加
+    result += '\n\n// JSS WebGPU Initialization\n';
+    result += generateInitFunction();
+    
+    // ラッパー関数を追加
+    result += '\n\n// JSS WebGPU Wrapper Functions\n';
+    result += wrapperFunctions.join('\n');
+    
+    // シェーダーコードを追加
     result += '\n\n// Generated WGSL Shader Code\n';
     result += 'const shaderCode = {\n';
     
