@@ -2,9 +2,7 @@
 // 引数から自動的にバインディングが生成される
 @compute
 function addVectors(inputA: read<f32[]>, inputB: read<f32[]>, output: write<f32[]>) {
-  let a = inputA[index];
-  let b = inputB[index];
-  output[index] = a + b;
+  output[index] = inputA[index] + inputB[index];
 }
 
 async function runSimpleExample() {

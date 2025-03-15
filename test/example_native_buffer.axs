@@ -2,13 +2,7 @@
 // バッファの型情報を引数に指定することで、自動的にバインディングが生成されます
 @compute
 function addVectors(inputA: read<f32[]>, inputB: read<f32[]>, output: write<f32[]>) {
-  // 入力バッファからデータを読み取り
-  // indexはglobal_id.xから自動的に取得されます
-  let a = inputA[index];
-  let b = inputB[index];
-  
-  // 計算結果を出力バッファに書き込み
-  output[index] = a + b;
+  output[index] = inputA[index] + inputB[index];
 }
 
 // 新しいシンプルな使用例
