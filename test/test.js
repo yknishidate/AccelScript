@@ -10,7 +10,8 @@ function normalFunction(a, b) {
   return a + b;
 }
 
-// @compute
+// @compute属性を持つ関数（WGSLに変換される）
+@compute
 function addNumbers(x, y) {
   return x + y;
 }
@@ -20,7 +21,8 @@ function anotherFunction() {
   console.log("This is a normal JS function");
 }
 
-/* @compute */
+// 別の@compute属性を持つ関数
+@compute
 function multiplyNumbers(a, b) {
   return a * b;
 }

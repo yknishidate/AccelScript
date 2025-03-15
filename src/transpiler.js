@@ -9,116 +9,68 @@ const t = require('@babel/types');
 const generate = require('@babel/generator').default;
 
 /**
- * ソースコードをASTに変換する
+ * @compute属性を持つ関数を抽出する前処理
  * @param {string} source JavaScriptのソースコード
- * @returns {Object} Babel AST
+ * @returns {{jsCode: string, computeFunctions: Array<{name: string, params: string[], body: string}>}}
  */
-function parseToAST(source) {
-  return parser.parse(source, {
-    sourceType: 'module',
-    // コメントを保持するオプションを追加
-    attachComments: true
-  });
-}
-
-/**
- * ASTから@compute属性を持つ関数を抽出する
- * @param {Object} ast Babel AST
- * @returns {{jsAST: Object, computeFunctions: Array<{name: string, node: Object, params: Array}>}}
- */
-function extractComputeFunctions(ast) {
-  const computeFunctions = [];
-  
-  // ASTを走査して@compute属性を持つ関数を検出
-  traverse(ast, {
-    FunctionDeclaration(path) {
-      // 関数の前にコメントがあるか確認
-      const comments = path.node.leadingComments || [];
-      const isComputeFunction = comments.some(comment => 
-        comment.value.includes('@compute')
-      );
-      
-      if (isComputeFunction) {
-        // @compute属性を持つ関数情報を保存
-        computeFunctions.push({
-          name: path.node.id.name,
-          node: path.node,
-          params: path.node.params.map(param => {
-            if (t.isIdentifier(param)) {
-              return {
-                name: param.name,
-                type: 'f32' // デフォルトの型（実際には型推論が必要）
-              };
-            }
-            return null;
-          }).filter(Boolean)
-        });
-        
-        // 元のASTから関数を削除
-        path.remove();
-      }
-    }
-  });
-  
-  return {
-    jsAST: ast,
-    computeFunctions
+function preprocess(source) {
+  // 結果を格納するオブジェクト
+  const result = {
+    jsCode: source,
+    computeFunctions: []
   };
-}
 
-/**
- * 関数のASTを中間表現（IR）に変換する
- * @param {Object} functionInfo 関数情報
- * @returns {Object} 中間表現
- */
-function convertToIR(functionInfo) {
-  // 簡易的な中間表現を作成
-  // 実際の実装ではより複雑な変換が必要
-  const ir = {
-    name: functionInfo.name,
-    params: functionInfo.params,
-    body: functionInfo.node.body.body,
-    returnType: 'void' // デフォルトの戻り値型
-  };
+  // @compute属性を持つ関数を検出する正規表現
+  // デコレータ構文: @compute\nfunction name(...) {...}
+  const decoratorRegex = /@compute\s*\n\s*function\s+(\w+)\s*\(([^)]*)\)\s*{([\s\S]*?)}/g;
   
-  return ir;
+  // @compute属性を持つ関数を検出し、JSコードから除外する
+  let match;
+  while ((match = decoratorRegex.exec(source)) !== null) {
+    const fullMatch = match[0];
+    const functionName = match[1];
+    const params = match[2].split(',').map(param => param.trim()).filter(Boolean);
+    const functionBody = match[3];
+    
+    // 検出した関数情報を保存
+    result.computeFunctions.push({
+      name: functionName,
+      params,
+      body: functionBody
+    });
+    
+    // JSコードから@compute関数を除外
+    result.jsCode = result.jsCode.replace(fullMatch, '');
+  }
+  
+  return result;
 }
 
 /**
- * 中間表現（IR）をWGSLコードに変換する
- * @param {Object} ir 中間表現
+ * JavaScript関数をWGSLのcompute shaderに変換する
+ * @param {{name: string, params: string[], body: string}} functionInfo 関数情報
  * @returns {string} WGSLコード
  */
-function generateWGSL(ir) {
-  // パラメータの文字列を生成
-  const paramsStr = ir.params.map(param => `${param.name}: ${param.type}`).join(', ');
+function convertToWGSL(functionInfo) {
+  // パラメータの型を推測（簡易的な実装）
+  const typedParams = functionInfo.params.map(param => `${param}: f32`);
   
-  // 関数本体のコードを生成（簡易的な実装）
-  let bodyCode = '';
-  ir.body.forEach(statement => {
-    // 簡易的な変換: JavaScriptのステートメントをそのままWGSLに変換
-    // 実際の実装ではより複雑な変換が必要
-    const jsCode = generate(statement).code;
-    bodyCode += `  ${jsCode}\n`;
-  });
+  // バッファのバインディングを追加
+  const bufferBindings = `
+@group(0) @binding(0) var<storage, read> inputA: array<f32>;
+@group(0) @binding(1) var<storage, read> inputB: array<f32>;
+@group(0) @binding(2) var<storage, read_write> output: array<f32>;
+`;
   
   // WGSLコードを生成
-  const wgslCode = `
+  const wgslCode = `${bufferBindings}
 @compute @workgroup_size(1)
-fn ${ir.name}(${paramsStr}) -> ${ir.returnType} {
-${bodyCode}}
+fn ${functionInfo.name}(${typedParams.join(', ')}) -> void {
+  ${functionInfo.body}
+}
 `;
   
   return wgslCode;
-}
-
-/**
- * ASTをJavaScriptコードに変換する
- * @param {Object} ast Babel AST
- * @returns {string} JavaScriptコード
- */
-function generateJS(ast) {
-  return generate(ast).code;
 }
 
 /**
@@ -127,44 +79,42 @@ function generateJS(ast) {
  * @returns {string} 変換後のJavaScriptコード
  */
 function transpile(source) {
-  // 1. ソースをASTに変換
-  const ast = parseToAST(source);
+  // 1. 前処理: @compute関数を抽出
+  const { jsCode, computeFunctions } = preprocess(source);
   
-  // 2. ASTから@compute関数を抽出
-  const { jsAST, computeFunctions } = extractComputeFunctions(ast);
+  // 2. 残りのJSコードをASTに変換
+  const ast = parser.parse(jsCode, {
+    sourceType: 'module'
+  });
   
-  // 3. 各関数をIRに変換し、WGSLを生成
+  // 3. ASTをJavaScriptに変換
+  let result = generate(ast).code;
+  
+  // 4. 各@compute関数をWGSLに変換
   const wgslShaders = {};
   for (const funcInfo of computeFunctions) {
-    const ir = convertToIR(funcInfo);
-    wgslShaders[funcInfo.name] = generateWGSL(ir);
+    wgslShaders[funcInfo.name] = convertToWGSL(funcInfo);
   }
-  
-  // 4. 残りのASTをJavaScriptに変換
-  let jsCode = generateJS(jsAST);
   
   // 5. シェーダーコードをJSに埋め込む
   if (Object.keys(wgslShaders).length > 0) {
-    jsCode += '\n\n// Generated WGSL Shader Code\n';
-    jsCode += 'const shaderCode = {\n';
+    result += '\n\n// Generated WGSL Shader Code\n';
+    result += 'const shaderCode = {\n';
     
     const entries = Object.entries(wgslShaders);
     for (let i = 0; i < entries.length; i++) {
       const [name, code] = entries[i];
-      jsCode += `  ${name}: \`${code}\`${i < entries.length - 1 ? ',' : ''}\n`;
+      result += `  ${name}: \`${code}\`${i < entries.length - 1 ? ',' : ''}\n`;
     }
     
-    jsCode += '};\n';
+    result += '};\n';
   }
   
-  return jsCode;
+  return result;
 }
 
 module.exports = {
-  parseToAST,
-  extractComputeFunctions,
-  convertToIR,
-  generateWGSL,
-  generateJS,
+  preprocess,
+  convertToWGSL,
   transpile
 };
