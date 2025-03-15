@@ -167,7 +167,13 @@ async function runComputation() {
   const computePass = commandEncoder.beginComputePass();
   computePass.setPipeline(computePipeline);
   computePass.setBindGroup(0, bindGroup);
-  computePass.dispatchWorkgroups(data.length / 4); // 4要素ごとにワークグループを割り当て
+  
+  // ワークグループ数を計算（ワークグループサイズ64に合わせて調整）
+  // Math.ceilを使用して、すべての要素が処理されるようにする
+  const workgroupSize = 64;
+  const workgroupCount = Math.ceil(data.length / workgroupSize);
+  computePass.dispatchWorkgroups(workgroupCount);
+  
   computePass.end();
   
   // 結果をステージングバッファにコピー
@@ -324,7 +330,12 @@ async function runComputation() {
   const computePass = commandEncoder.beginComputePass();
   computePass.setPipeline(computePipeline);
   computePass.setBindGroup(0, bindGroup);
-  computePass.dispatchWorkgroups(data.length / 4); // 4要素ごとにワークグループを割り当て
+
+  // ワークグループ数を計算（ワークグループサイズ64に合わせて調整）
+  // Math.ceilを使用して、すべての要素が処理されるようにする
+  const workgroupSize = 64;
+  const workgroupCount = Math.ceil(data.length / workgroupSize);
+  computePass.dispatchWorkgroups(workgroupCount);
   computePass.end();
 
   // 結果をステージングバッファにコピー
@@ -368,9 +379,14 @@ const shaderCode = {
 @group(0) @binding(1) var&lt;storage, read&gt; inputB: array&lt;f32&gt;;
 @group(0) @binding(2) var&lt;storage, read_write&gt; output: array&lt;f32&gt;;
 
-@compute @workgroup_size(1)
-fn addVectors(index: f32) -&gt; void {
+@compute @workgroup_size(64)  // 一般的なワークグループサイズ（GPUによって最適値は異なる）
+fn addVectors(@builtin(global_invocation_id) global_id: vec3&lt;u32&gt;) {
+  // JavaScriptのindexパラメータをglobal_id.xにマッピング
+  let index = global_id.x;
   
+  // インデックスが配列の範囲内かチェック（バッファオーバーランを防止）
+  if (index &lt; arrayLength(&output)) {
+    
   // 入力バッファからデータを読み取り
   let a = inputA[index];
   let b = inputB[index];
@@ -378,6 +394,7 @@ fn addVectors(index: f32) -&gt; void {
   // 計算結果を出力バッファに書き込み
   output[index] = a + b;
 
+  }
 }
 `
 };

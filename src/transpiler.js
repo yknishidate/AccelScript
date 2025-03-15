@@ -53,7 +53,14 @@ function preprocess(source) {
  */
 function convertToWGSL(functionInfo) {
   // パラメータの型を推測（簡易的な実装）
-  const typedParams = functionInfo.params.map(param => `${param}: f32`);
+  // 配列のインデックスとして使用されるパラメータはu32に設定
+  const typedParams = functionInfo.params.map(param => {
+    // パラメータ名に'index'が含まれる場合はu32として扱う
+    if (param.toLowerCase().includes('index')) {
+      return `${param}: u32`;
+    }
+    return `${param}: f32`;
+  });
   
   // バッファのバインディングを追加
   const bufferBindings = `
@@ -64,9 +71,15 @@ function convertToWGSL(functionInfo) {
   
   // WGSLコードを生成
   const wgslCode = `${bufferBindings}
-@compute @workgroup_size(1)
-fn ${functionInfo.name}(${typedParams.join(', ')}) -> void {
-  ${functionInfo.body}
+@compute @workgroup_size(64)  // 一般的なワークグループサイズ（GPUによって最適値は異なる）
+fn ${functionInfo.name}(@builtin(global_invocation_id) global_id: vec3<u32>) {
+  // JavaScriptのindexパラメータをglobal_id.xにマッピング
+  let index = global_id.x;
+  
+  // インデックスが配列の範囲内かチェック（バッファオーバーランを防止）
+  if (index < arrayLength(&output)) {
+    ${functionInfo.body}
+  }
 }
 `;
   

@@ -78,7 +78,10 @@ const shaderCode = {
 @group(0) @binding(2) var<storage, read_write> output: array<f32>;
 
 @compute @workgroup_size(1)
-fn addVectors(index: f32) -> void {
+fn addVectors(@builtin(global_invocation_id) global_id: vec3<u32>) {
+  // JavaScriptのindexパラメータをglobal_id.xにマッピング
+  let index = global_id.x;
+  
   // 入力バッファからデータを読み取り
   let a = inputA[index];
   let b = inputB[index];
@@ -114,7 +117,9 @@ JSS（JavaScript Shader Extension）は、以下のステップでJavaScriptコ�
 
 現在のバージョンでは、以下の制限があります：
 
-- 関数パラメータの型は常に`f32`として扱われます
+- 関数パラメータの型は簡易的な推測のみ：
+  - パラメータ名に'index'が含まれる場合は`u32`として扱われます
+  - それ以外のパラメータは`f32`として扱われます
 - バッファのバインディングは固定で、`inputA`、`inputB`、`output`の3つのみサポートしています
 - ワークグループサイズは固定で`1`です
 - 複雑なJavaScript構文はサポートしていません

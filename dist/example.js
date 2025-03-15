@@ -114,7 +114,12 @@ async function runComputation() {
   const computePass = commandEncoder.beginComputePass();
   computePass.setPipeline(computePipeline);
   computePass.setBindGroup(0, bindGroup);
-  computePass.dispatchWorkgroups(data.length / 4); // 4要素ごとにワークグループを割り当て
+
+  // ワークグループ数を計算（ワークグループサイズ64に合わせて調整）
+  // Math.ceilを使用して、すべての要素が処理されるようにする
+  const workgroupSize = 64;
+  const workgroupCount = Math.ceil(data.length / workgroupSize);
+  computePass.dispatchWorkgroups(workgroupCount);
   computePass.end();
 
   // 結果をステージングバッファにコピー
@@ -158,9 +163,14 @@ const shaderCode = {
 @group(0) @binding(1) var<storage, read> inputB: array<f32>;
 @group(0) @binding(2) var<storage, read_write> output: array<f32>;
 
-@compute @workgroup_size(1)
-fn addVectors(index: f32) -> void {
+@compute @workgroup_size(64)  // 一般的なワークグループサイズ（GPUによって最適値は異なる）
+fn addVectors(@builtin(global_invocation_id) global_id: vec3<u32>) {
+  // JavaScriptのindexパラメータをglobal_id.xにマッピング
+  let index = global_id.x;
   
+  // インデックスが配列の範囲内かチェック（バッファオーバーランを防止）
+  if (index < arrayLength(&output)) {
+    
   // 入力バッファからデータを読み取り
   let a = inputA[index];
   let b = inputB[index];
@@ -168,6 +178,7 @@ fn addVectors(index: f32) -> void {
   // 計算結果を出力バッファに書き込み
   output[index] = a + b;
 
+  }
 }
 `
 };

@@ -131,7 +131,13 @@ async function runComputation() {
   const computePass = commandEncoder.beginComputePass();
   computePass.setPipeline(computePipeline);
   computePass.setBindGroup(0, bindGroup);
-  computePass.dispatchWorkgroups(data.length / 4); // 4要素ごとにワークグループを割り当て
+  
+  // ワークグループ数を計算（ワークグループサイズ64に合わせて調整）
+  // Math.ceilを使用して、すべての要素が処理されるようにする
+  const workgroupSize = 64;
+  const workgroupCount = Math.ceil(data.length / workgroupSize);
+  computePass.dispatchWorkgroups(workgroupCount);
+  
   computePass.end();
   
   // 結果をステージングバッファにコピー
