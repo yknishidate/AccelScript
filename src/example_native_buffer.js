@@ -20,21 +20,38 @@ function addVectors(inputA: read<f32[]>, inputB: read<f32[]>, output: write<f32[
 async function runSimpleExample() {
   // WebGPUを初期化
   await JSS.init();
+  const device = JSS.getDevice();
   
   // GPUバッファを作成
   const data = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
   
-  const inputABuffer = new JSSFloat32Array(data);
-  const inputBBuffer = new JSSFloat32Array(data);
-  const outputBuffer = new JSSFloat32Array(data.length);
+  const inputABuffer = device.createBuffer({
+    size: data.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  
+  const inputBBuffer = device.createBuffer({
+    size: data.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+  });
+  
+  const outputBuffer = device.createBuffer({
+    size: data.byteLength,
+    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+  });
+  
+  // 入力データをGPUバッファにコピー
+  device.queue.writeBuffer(inputABuffer, 0, data);
+  device.queue.writeBuffer(inputBBuffer, 0, data);
   
   // 計算を実行（自動生成されたラッパー関数を使用）
   await dispatch(addVectors(inputABuffer, inputBBuffer, outputBuffer), 8);
   
   // 結果を表示
-  console.log('Input A:', inputABuffer.array);
-  console.log('Input B:', inputABuffer.array);
-  console.log('Result:', outputBuffer.array);
+  const resultData = await JSS.readBuffer(outputBuffer, data.byteLength);
+  console.log('Input A:', data);
+  console.log('Input B:', data);
+  console.log('Result:', resultData);
 }
 
 // 計算を実行

@@ -157,7 +157,8 @@ async function dispatch(shaderInfo, threadCount) {
  * @returns {string} インポート文
  */
 function generateImports() {
-  return `import { JSS } from './runtime.js';\n`;
+  // return `import { JSS } from './runtime.js';\n`;
+  return `import { JSS, JSSFloat32Array } from './runtime.js';\n`;
 }
 
 /**
