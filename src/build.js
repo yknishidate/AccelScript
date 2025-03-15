@@ -14,16 +14,22 @@ const source = fs.readFileSync(sourcePath, 'utf-8');
 // トランスパイル実行
 const result = transpile(source);
 
-// 出力ファイルに書き込む
+// 出力ディレクトリを作成
 const outputPath = path.join(__dirname, '..', 'dist');
 if (!fs.existsSync(outputPath)) {
   fs.mkdirSync(outputPath, { recursive: true });
 }
 
+// トランスパイル結果を出力
 const outputFilePath = path.join(outputPath, 'example.js');
 fs.writeFileSync(outputFilePath, result, 'utf-8');
-
 console.log(`トランスパイル完了: ${outputFilePath}`);
+
+// ランタイムライブラリをコピー
+const runtimeSrc = path.join(__dirname, 'runtime.js');
+const runtimeDest = path.join(outputPath, 'runtime.js');
+fs.copyFileSync(runtimeSrc, runtimeDest);
+console.log(`ランタイムライブラリをコピー: ${runtimeDest}`);
 
 // HTMLファイルも作成（ブラウザでの実行用）
 const htmlContent = `
@@ -72,7 +78,7 @@ const htmlContent = `
     <p>WebGPUが利用可能な場合、ここに結果が表示されます。</p>
   </div>
   
-  <script src="example.js"></script>
+  <script type="module" src="example.js"></script>
   <script>
     // 出力をキャプチャ
     const originalConsoleLog = console.log;

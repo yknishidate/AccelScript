@@ -19,13 +19,13 @@ function addVectors(inputA: read<f32[]>, inputB: read<f32[]>, output: write<f32[
 // 新しいシンプルな使用例
 async function runSimpleExample() {
   // WebGPUを初期化
-  await initJSS();
+  await JSS.init();
   
   // 入力データを準備
   const data = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
   
   // GPUバッファを作成
-  const device = globalThis.__JSS_DEVICE__;
+  const device = JSS.getDevice();
   
   const inputABuffer = device.createBuffer({
     size: data.byteLength,
@@ -49,32 +49,13 @@ async function runSimpleExample() {
   // 計算を実行（自動生成されたラッパー関数を使用）
   await addVectors(inputABuffer, inputBBuffer, outputBuffer);
   
-  // 結果を読み取るためのステージングバッファを作成
-  const stagingBuffer = device.createBuffer({
-    size: data.byteLength,
-    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-  });
-  
-  // 結果をステージングバッファにコピー
-  const commandEncoder = device.createCommandEncoder();
-  commandEncoder.copyBufferToBuffer(
-    outputBuffer, 0,
-    stagingBuffer, 0,
-    data.byteLength
-  );
-  device.queue.submit([commandEncoder.finish()]);
-  
-  // 結果を読み取り
-  await stagingBuffer.mapAsync(GPUMapMode.READ);
-  const resultData = new Float32Array(stagingBuffer.getMappedRange());
+  // 結果を読み取る
+  const resultData = await JSS.readBuffer(outputBuffer, data.byteLength);
   
   // 結果を表示
   console.log('Input A:', data);
   console.log('Input B:', data);
   console.log('Result:', resultData);
-  
-  // リソースを解放
-  stagingBuffer.unmap();
 }
 
 // 計算を実行

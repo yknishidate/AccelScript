@@ -11,6 +11,7 @@ JSS（JavaScript Shader Extension）は以下の特徴を持ちます：
   - その関数はJSからは除外されます
   - その関数はWGSL（WebGPU Shading Language）のcompute shaderに変換されます
   - 変換されたシェーダーコードは文字列として出力後のJSに埋め込まれます
+  - 自動生成されたラッパー関数を通じて簡単に呼び出せます
 
 ## インストール
 
@@ -23,24 +24,17 @@ npm install
 ### 1. JSS形式のコードを作成
 
 ```javascript
-// 通常のJavaScript関数
-function normalFunction(a, b) {
-  return a + b;
-}
-
 // @compute属性を持つ関数（WGSLに変換される）
 @compute
-function addVectors(index) {
+function addVectors(inputA: read<f32[]>, inputB: read<f32[]>, output: write<f32[]>) {
   // 入力バッファからデータを読み取り
+  // indexはglobal_id.xから自動的に取得されます
   let a = inputA[index];
   let b = inputB[index];
   
   // 計算結果を出力バッファに書き込み
   output[index] = a + b;
 }
-
-// 通常のJavaScriptコード
-console.log(normalFunction(5, 3));
 ```
 
 ### 2. トランスパイル
@@ -59,38 +53,38 @@ const result = transpile(source);
 fs.writeFileSync('output.js', result, 'utf-8');
 ```
 
-### 3. 変換後のコード
+### 3. 変換後のコードを使用
 
 ```javascript
-// 通常のJavaScript関数
-function normalFunction(a, b) {
-  return a + b;
-}
+import { JSS } from './runtime.js';
 
-// 通常のJavaScriptコード
-console.log(normalFunction(5, 3));
+// WebGPUを初期化
+await JSS.init();
 
-// Generated WGSL Shader Code
-const shaderCode = {
-  addVectors: `
-@group(0) @binding(0) var<storage, read> inputA: array<f32>;
-@group(0) @binding(1) var<storage, read> inputB: array<f32>;
-@group(0) @binding(2) var<storage, read_write> output: array<f32>;
+// バッファを作成
+const device = JSS.getDevice();
+const inputABuffer = device.createBuffer({
+  size: data.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+});
+const inputBBuffer = device.createBuffer({
+  size: data.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+});
+const outputBuffer = device.createBuffer({
+  size: data.byteLength,
+  usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC
+});
 
-@compute @workgroup_size(1)
-fn addVectors(@builtin(global_invocation_id) global_id: vec3<u32>) {
-  // JavaScriptのindexパラメータをglobal_id.xにマッピング
-  let index = global_id.x;
-  
-  // 入力バッファからデータを読み取り
-  let a = inputA[index];
-  let b = inputB[index];
-  
-  // 計算結果を出力バッファに書き込み
-  output[index] = a + b;
-}
-`
-};
+// データをバッファにコピー
+device.queue.writeBuffer(inputABuffer, 0, data);
+device.queue.writeBuffer(inputBBuffer, 0, data);
+
+// 計算を実行（自動生成されたラッパー関数を使用）
+await addVectors(inputABuffer, inputBBuffer, outputBuffer);
+
+// 結果を読み取る
+const resultData = await JSS.readBuffer(outputBuffer, data.byteLength);
 ```
 
 ## デモ
@@ -111,17 +105,25 @@ JSS（JavaScript Shader Extension）は、以下のステップでJavaScriptコ�
 2. 残りのJSコードをASTに変換
 3. ASTをJavaScriptに変換
 4. 各`@compute`関数をWGSLに変換
-5. シェーダーコードをJSに埋め込み
+5. ランタイムライブラリのインポート文を追加
+6. 自動生成されたラッパー関数を追加
+7. シェーダーコードをJSに埋め込み
+
+## ランタイムライブラリ
+
+JSSには、WebGPUの初期化と管理を行うランタイムライブラリが含まれています。主な機能は以下の通りです：
+
+- `JSS.init()`: WebGPUを初期化する
+- `JSS.getDevice()`: 現在のGPUデバイスを取得する
+- `JSS.executeShader()`: シェーダーを実行する
+- `JSS.readBuffer()`: バッファから結果を読み取る
 
 ## 制限事項
 
 現在のバージョンでは、以下の制限があります：
 
-- 関数パラメータの型は簡易的な推測のみ：
-  - パラメータ名に'index'が含まれる場合は`u32`として扱われます
-  - それ以外のパラメータは`f32`として扱われます
-- バッファのバインディングは固定で、`inputA`、`inputB`、`output`の3つのみサポートしています
-- ワークグループサイズは固定で`1`です
+- バッファパラメータは `read<f32[]>` または `write<f32[]>` の形式で指定する必要があります
+- ワークグループサイズは固定で`64`です
 - 複雑なJavaScript構文はサポートしていません
 
 ## ライセンス
