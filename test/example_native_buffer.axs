@@ -1,8 +1,3 @@
-/**
- * JSS - JavaScript Shader Extension の実用例
- * WebGPUを使用して@compute関数を実行する例
- */
-
 // @compute属性を持つ関数（WGSLのcompute shaderに変換される）
 // バッファの型情報を引数に指定することで、自動的にバインディングが生成されます
 @compute
@@ -19,8 +14,8 @@ function addVectors(inputA: read<f32[]>, inputB: read<f32[]>, output: write<f32[
 // 新しいシンプルな使用例
 async function runSimpleExample() {
   // WebGPUを初期化
-  await JSS.init();
-  const device = JSS.getDevice();
+  await AxRuntime.init();
+  const device = AxRuntime.getDevice();
   
   // GPUバッファを作成
   const data = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8]);
@@ -48,7 +43,7 @@ async function runSimpleExample() {
   await dispatch(addVectors(inputABuffer, inputBBuffer, outputBuffer), 8);
   
   // 結果を表示
-  const resultData = await JSS.readBuffer(outputBuffer, data.byteLength);
+  const resultData = await AxRuntime.readBuffer(outputBuffer, data.byteLength);
   console.log('Input A:', data);
   console.log('Input B:', data);
   console.log('Result:', resultData);

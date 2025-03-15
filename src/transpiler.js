@@ -1,8 +1,3 @@
-/**
- * JSS - JavaScript Shader Extension
- * JavaScriptを拡張し、@compute属性を持つ関数をWGSLのcompute shaderに変換するトランスパイラー
- */
-
 const parser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 const t = require('@babel/types');
@@ -141,7 +136,7 @@ async function dispatch(shaderInfo, threadCount) {
     throw new Error('threadCount must be specified');
   }
   
-  return JSS.executeShader(
+  return AxRuntime.executeShader(
     shaderInfo.name,
     shaderInfo.code,
     shaderInfo.buffers,
@@ -157,8 +152,7 @@ async function dispatch(shaderInfo, threadCount) {
  * @returns {string} インポート文
  */
 function generateImports() {
-  // return `import { JSS } from './runtime.js';\n`;
-  return `import { JSS, JSSFloat32Array } from './runtime.js';\n`;
+  return `import { AxRuntime, AxFloat32Array, AxInt32Array, AxUint32Array } from './runtime.js';\n`;
 }
 
 /**
@@ -205,7 +199,7 @@ function transpile(source) {
     result = generateImports() + result;
     
     // ラッパー関数を追加
-    result += '\n\n// JSS WebGPU Wrapper Functions\n';
+    result += '\n\n// WebGPU Wrapper Functions\n';
     result += wrapperFunctions.join('\n');
 
     // dispatch関数を追加

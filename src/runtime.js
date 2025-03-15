@@ -1,13 +1,8 @@
 /**
- * JSS - JavaScript Shader Extension
- * ランタイムライブラリ
- */
-
-/**
- * JSSFloat32Array - Float32配列とGPUバッファをラップするクラス
+ * AxFloat32Array - Float32配列とGPUバッファをラップするクラス
  * JS側の配列とGPUバッファの両方を内部に持ち、自動的に同期を行う
  */
-export class JSSFloat32Array {
+export class AxFloat32Array {
   dirty;         // JS側のデータが変更されたかどうか
   needsReadback; // GPUからのreadbackが必要かどうか
   size;          // バッファのサイズ（バイト単位）
@@ -93,7 +88,7 @@ export class JSSFloat32Array {
    * JS側のデータをGPUバッファに転送する
    */
   syncToGPU() {
-    const device = JSS.getDevice();
+    const device = AxRuntime.getDevice();
     
     // 既存のバッファがあれば破棄
     if (this.buffer !== null) {
@@ -123,7 +118,7 @@ export class JSSFloat32Array {
     if (this.buffer === null) return;
     
     // バッファからデータを読み取る
-    const data = await JSS.readBuffer(this.buffer, this.size);
+    const data = await AxRuntime.readBuffer(this.buffer, this.size);
     this.array.set(data);
     
     this.needsReadback = false;
@@ -140,10 +135,10 @@ export class JSSFloat32Array {
 }
 
 /**
- * JSSInt32Array - Int32配列とGPUバッファをラップするクラス
+ * AxInt32Array - Int32配列とGPUバッファをラップするクラス
  * JS側の配列とGPUバッファの両方を内部に持ち、自動的に同期を行う
  */
-export class JSSInt32Array {
+export class AxInt32Array {
   array;         // JS側の配列データ（Int32Array）
   buffer;        // GPUバッファ
   dirty;         // JS側のデータが変更されたかどうか
@@ -231,7 +226,7 @@ export class JSSInt32Array {
    * JS側のデータをGPUバッファに転送する
    */
   syncToGPU() {
-    const device = JSS.getDevice();
+    const device = AxRuntime.getDevice();
     
     // 既存のバッファがあれば破棄
     if (this.buffer !== null) {
@@ -261,7 +256,7 @@ export class JSSInt32Array {
     if (this.buffer === null) return;
     
     // バッファからデータを読み取る
-    const device = JSS.getDevice();
+    const device = AxRuntime.getDevice();
     
     // ステージングバッファを作成
     const stagingBuffer = device.createBuffer({
@@ -306,10 +301,10 @@ export class JSSInt32Array {
 }
 
 /**
- * JSSUint32Array - Uint32配列とGPUバッファをラップするクラス
+ * AxUint32Array - Uint32配列とGPUバッファをラップするクラス
  * JS側の配列とGPUバッファの両方を内部に持ち、自動的に同期を行う
  */
-export class JSSUint32Array {
+export class AxUint32Array {
   array;         // JS側の配列データ（Uint32Array）
   buffer;        // GPUバッファ
   dirty;         // JS側のデータが変更されたかどうか
@@ -397,7 +392,7 @@ export class JSSUint32Array {
    * JS側のデータをGPUバッファに転送する
    */
   syncToGPU() {
-    const device = JSS.getDevice();
+    const device = AxRuntime.getDevice();
     
     // 既存のバッファがあれば破棄
     if (this.buffer !== null) {
@@ -427,7 +422,7 @@ export class JSSUint32Array {
     if (this.buffer === null) return;
     
     // バッファからデータを読み取る
-    const device = JSS.getDevice();
+    const device = AxRuntime.getDevice();
     
     // ステージングバッファを作成
     const stagingBuffer = device.createBuffer({
@@ -472,10 +467,9 @@ export class JSSUint32Array {
 }
 
 /**
- * JSS（JavaScript Shader Extension）のランタイムクラス
  * WebGPUの初期化と管理を行う
  */
-export class JSS {
+export class AxRuntime {
   // プライベート静的フィールド
   static #device = null;
   static #initialized = false;
@@ -510,7 +504,7 @@ export class JSS {
    */
   static getDevice() {
     if (!this.#initialized) {
-      throw new Error('JSS not initialized. Call JSS.init() first.');
+      throw new Error('AxRuntime not initialized. Call AxRuntime.init() first.');
     }
     return this.#device;
   }
@@ -578,7 +572,7 @@ export class JSS {
    * シェーダーを実行する
    * @param {string} name シェーダー名
    * @param {string} code WGSLコード
-   * @param {Array<GPUBuffer|JSSFloat32Array|JSSInt32Array|JSSUint32Array>} buffers バッファの配列
+   * @param {Array<GPUBuffer|AxFloat32Array|AxInt32Array|AxUint32Array>} buffers バッファの配列
    * @param {Array<string>} bufferTypes バッファタイプの配列（'read-only-storage' または 'storage'）
    * @param {number} threadCount スレッド数
    * @returns {Promise<void>}
@@ -586,11 +580,11 @@ export class JSS {
   static async executeShader(name, code, buffers, bufferTypes, threadCount) {
     const device = this.getDevice();
     
-    // JSSArray型のバッファをGPUバッファに変換
+    // AxArray型のバッファをGPUバッファに変換
     const gpuBuffers = buffers.map(buffer => {
-      if (buffer instanceof JSSFloat32Array || 
-          buffer instanceof JSSInt32Array || 
-          buffer instanceof JSSUint32Array) {
+      if (buffer instanceof AxFloat32Array || 
+          buffer instanceof AxInt32Array || 
+          buffer instanceof AxUint32Array) {
         return buffer.getBuffer();
       }
       return buffer;
@@ -634,11 +628,11 @@ export class JSS {
     const commands = commandEncoder.finish();
     device.queue.submit([commands]);
     
-    // 実行後、JSSArray型のバッファを同期
+    // 実行後、AxArray型のバッファを同期
     for (const buffer of buffers) {
-      if (buffer instanceof JSSFloat32Array || 
-          buffer instanceof JSSInt32Array || 
-          buffer instanceof JSSUint32Array) {
+      if (buffer instanceof AxFloat32Array || 
+          buffer instanceof AxInt32Array || 
+          buffer instanceof AxUint32Array) {
         await buffer.afterDispatch();
       }
     }

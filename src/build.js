@@ -1,14 +1,17 @@
-/**
- * JSS - JavaScript Shader Extension のビルドスクリプト
- * example.jsをトランスパイルして、実際に動作するJavaScriptコードを生成します
- */
-
 const fs = require('fs');
 const path = require('path');
 const { transpile } = require('./transpiler');
 
 // ソースファイルを読み込む
-const sourcePath = path.join(__dirname, 'example.js');
+const args = process.argv;
+const sourcePath = args[2];
+if (!sourcePath) {
+  console.error("Usage: node script.js <file-path>");
+  process.exit(1);
+}
+
+console.log(`Received file path: ${sourcePath}`);
+
 const source = fs.readFileSync(sourcePath, 'utf-8');
 
 // トランスパイル実行
@@ -21,7 +24,7 @@ if (!fs.existsSync(outputPath)) {
 }
 
 // トランスパイル結果を出力
-const outputFilePath = path.join(outputPath, 'example.js');
+const outputFilePath = path.join(outputPath, 'ax_output.js');
 fs.writeFileSync(outputFilePath, result, 'utf-8');
 console.log(`トランスパイル完了: ${outputFilePath}`);
 
@@ -38,7 +41,7 @@ const htmlContent = `
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JSS - JavaScript Shader Extension Demo</title>
+  <title>AccelScript Demo</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -80,7 +83,7 @@ const htmlContent = `
   <h2>実行結果</h2>
   <pre class="output" id="output"></pre>
   
-  <script type="module" src="example.js"></script>
+  <script type="module" src="ax_output.js"></script>
   <script>
     Prism.highlightAll();
 
