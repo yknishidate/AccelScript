@@ -62,24 +62,28 @@ const htmlContent = `
       color: #333;
     }
   </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
 </head>
 <body>
-  <h1>JSS - JavaScript Shader Extension Demo</h1>
-  <p>このデモは、JavaScriptを拡張して@compute属性を持つ関数をWGSLのcompute shaderに変換するトランスパイラーの例です。</p>
+  <h1>AccelScript Demo</h1>
   
-  <h2>元のコード（@compute属性を含む）</h2>
-  <pre id="source-code">${source.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+  <h2>コード</h2>
+  <pre id="source-code"><code = class="lang-js">${source.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
   
+  <!--
   <h2>トランスパイル後のコード</h2>
-  <pre id="transpiled-code">${result.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+  <pre id="transpiled-code"><code = class="lang-js">${result.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
+  -->
   
   <h2>実行結果</h2>
-  <div class="output" id="output">
-    <p>WebGPUが利用可能な場合、ここに結果が表示されます。</p>
-  </div>
+  <pre class="output" id="output"></pre>
   
   <script type="module" src="example.js"></script>
   <script>
+    Prism.highlightAll();
+
     // 出力をキャプチャ
     const originalConsoleLog = console.log;
     const outputDiv = document.getElementById('output');
