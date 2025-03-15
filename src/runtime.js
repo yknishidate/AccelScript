@@ -530,11 +530,14 @@ export class AxRuntime {
    * コンピュートパイプラインを作成または取得する
    * @param {string} name シェーダー名
    * @param {GPUShaderModule} shaderModule シェーダーモジュール
-   * @param {Array<{type: string, visibility: number}>} bufferTypes バッファタイプの配列
+   * @param {Array<string>} bufferTypes バッファタイプの配列
    * @returns {{pipeline: GPUComputePipeline, bindGroupLayout: GPUBindGroupLayout}} パイプラインとバインドグループレイアウト
    */
   static getPipeline(name, shaderModule, bufferTypes) {
-    if (!this.#pipelines.has(name)) {
+    // パイプライン名に次元情報が含まれているか確認
+    const pipelineName = name;
+    
+    if (!this.#pipelines.has(pipelineName)) {
       const device = this.getDevice();
       
       // バインドグループレイアウトを作成
@@ -553,40 +556,80 @@ export class AxRuntime {
         bindGroupLayouts: [bindGroupLayout]
       });
       
+      // シェーダー名からエントリーポイント名を抽出
+      // 例: "add_1d" -> "add"
+      const entryPoint = name.split('_')[0];
+      
       // コンピュートパイプラインを作成
       const pipeline = device.createComputePipeline({
         layout: pipelineLayout,
         compute: {
           module: shaderModule,
-          entryPoint: name
+          entryPoint: entryPoint
         }
       });
       
-      this.#pipelines.set(name, { pipeline, bindGroupLayout });
+      this.#pipelines.set(pipelineName, { pipeline, bindGroupLayout });
     }
     
-    return this.#pipelines.get(name);
+    return this.#pipelines.get(pipelineName);
   }
   
   /**
    * シェーダーを実行する
    * @param {string} name シェーダー名
    * @param {string} code WGSLコード
-   * @param {Array<GPUBuffer|AxFloat32Array|AxInt32Array|AxUint32Array>} buffers バッファの配列
-   * @param {Array<string>} bufferTypes バッファタイプの配列（'read-only-storage' または 'storage'）
-   * @param {number} threadCount スレッド数
+   * @param {Array<Object|GPUBuffer|AxFloat32Array|AxInt32Array|AxUint32Array>} buffers バッファの配列（最初はユニフォームデータ）
+   * @param {Array<string>} bufferTypes バッファタイプの配列（'uniform', 'read-only-storage' または 'storage'）
+   * @param {number|Array|Object} threadCount スレッド数または{width, height}オブジェクト
    * @returns {Promise<void>}
    */
   static async executeShader(name, code, buffers, bufferTypes, threadCount) {
     const device = this.getDevice();
     
+    // threadCountの型に基づいて次元を判定
+    const is2D = Array.isArray(threadCount) || 
+                 (typeof threadCount === 'object' && threadCount !== null && 
+                  'width' in threadCount && 'height' in threadCount);
+    
+    // 2次元の場合、幅と高さを取得
+    let width, height;
+    if (is2D) {
+      if (Array.isArray(threadCount)) {
+        [width, height] = threadCount;
+      } else {
+        width = threadCount.width;
+        height = threadCount.height;
+      }
+    }
+    
     // AxArray型のバッファをGPUバッファに変換
-    const gpuBuffers = buffers.map(buffer => {
+    const gpuBuffers = buffers.map((buffer, index) => {
       if (buffer instanceof AxFloat32Array || 
           buffer instanceof AxInt32Array || 
           buffer instanceof AxUint32Array) {
         return buffer.getBuffer();
       }
+      
+      // 最初のバッファはユニフォームバッファ
+      if (index === 0 && bufferTypes[0] === 'uniform') {
+        // ユニフォームバッファを作成
+        const uniformBuffer = device.createBuffer({
+          size: 12, // 3つのu32（thread_count, height, is_2d）
+          usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
+        
+        // ユニフォームデータを書き込む
+        const uniformData = new Uint32Array([
+          buffer.width,
+          buffer.height,
+          buffer.is_2d
+        ]);
+        device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+        
+        return uniformBuffer;
+      }
+      
       return buffer;
     });
     
@@ -617,11 +660,23 @@ export class AxRuntime {
     computePass.setPipeline(pipeline);
     computePass.setBindGroup(0, bindGroup);
     
-    // ワークグループ数を計算（ワークグループサイズ64に合わせて調整）
-    const workgroupSize = 64;
-    const workgroupCount = Math.ceil(threadCount / workgroupSize);
+    // ワークグループ数を計算
+    if (is2D) {
+      // 2次元の場合（ワークグループサイズ 8x8）
+      const workgroupSizeX = 8;
+      const workgroupSizeY = 8;
+      const workgroupCountX = Math.ceil(width / workgroupSizeX);
+      const workgroupCountY = Math.ceil(height / workgroupSizeY);
+      
+      computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
+    } else {
+      // 1次元の場合（ワークグループサイズ 64）
+      const workgroupSize = 64;
+      const workgroupCount = Math.ceil(threadCount / workgroupSize);
+      
+      computePass.dispatchWorkgroups(workgroupCount);
+    }
     
-    computePass.dispatchWorkgroups(workgroupCount);
     computePass.end();
     
     // コマンドをキューに送信
@@ -629,7 +684,8 @@ export class AxRuntime {
     device.queue.submit([commands]);
     
     // 実行後、AxArray型のバッファを同期
-    for (const buffer of buffers) {
+    for (let i = 1; i < buffers.length; i++) {
+      const buffer = buffers[i];
       if (buffer instanceof AxFloat32Array || 
           buffer instanceof AxInt32Array || 
           buffer instanceof AxUint32Array) {

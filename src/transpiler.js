@@ -58,7 +58,7 @@ function parseBufferType(paramStr) {
 /**
  * JavaScript関数をWGSLのcompute shaderに変換する
  * @param {{name: string, params: string[], body: string}} functionInfo 関数情報
- * @returns {string} WGSLコード
+ * @returns {{1d: string, 2d: string}} 1次元と2次元のWGSLコード
  */
 function convertToWGSL(functionInfo) {
   // バッファパラメータを解析
@@ -70,30 +70,58 @@ function convertToWGSL(functionInfo) {
     }
   }
   
-  // バッファバインディングを生成
+  // 共通のユニフォームバッファ定義
+  const uniformsStruct = `struct Uniforms {
+  width: u32,
+  height: u32,
+  is_2d: u32,  // 1次元の場合は0、2次元の場合は1
+};
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;\n`;
+  
+  // バッファバインディング（ユニフォームバッファの後）
   let bufferBindings = '';
   for (let i = 0; i < bufferParams.length; i++) {
     const { name, access, type } = bufferParams[i];
     const storageAccess = access === 'read' ? 'read' : 'read_write';
-    bufferBindings += `@group(0) @binding(${i}) var<storage, ${storageAccess}> ${name}: array<${type}>;\n`;
+    // バインディングインデックスを1からスタート（0はユニフォームバッファ用）
+    bufferBindings += `@group(0) @binding(${i + 1}) var<storage, ${storageAccess}> ${name}: array<${type}>;\n`;
   }
   
-  // WGSLコードを生成
-  const wgslCode = `${bufferBindings}
-@compute @workgroup_size(64)  // 一般的なワークグループサイズ（GPUによって最適値は異なる）
+  // 1次元用WGSLコードを生成
+  const wgslCode1D = `${uniformsStruct}${bufferBindings}
+@compute @workgroup_size(64)  // 1次元用ワークグループサイズ
 fn ${functionInfo.name}(@builtin(global_invocation_id) global_id: vec3<u32>) {
   // グローバルインボケーションIDからインデックスを取得
   let index = global_id.x;
   
-  // インデックスが配列の範囲内かチェック（バッファオーバーランを防止）
-  // 最初のバッファがある場合、そのサイズをチェックに使用
-  ${bufferParams.length > 0 ? `if (index < arrayLength(&${bufferParams[0].name})) {` : ''}
+  // スレッド数を超えていないかチェック
+  if (index < uniforms.width) {
     ${functionInfo.body}
-  ${bufferParams.length > 0 ? '}' : ''}
+  }
+}
+`;
+
+  // 2次元用WGSLコードを生成
+  const wgslCode2D = `${uniformsStruct}${bufferBindings}
+@compute @workgroup_size(8, 8)  // 2次元用ワークグループサイズ
+fn ${functionInfo.name}(@builtin(global_invocation_id) global_id: vec3<u32>) {
+  // グローバルインボケーションIDからインデックスを取得
+  let x = global_id.x;
+  let y = global_id.y;
+  
+  // スレッド数を超えていないかチェック
+  if (x < uniforms.width && y < uniforms.height) {
+    let width = uniforms.width;
+    let index = y * width + x;
+    ${functionInfo.body}
+  }
 }
 `;
   
-  return wgslCode;
+  return {
+    '1d': wgslCode1D,
+    '2d': wgslCode2D
+  };
 }
 
 /**
@@ -106,23 +134,21 @@ function generateWrapperFunction(funcName, bufferParams) {
   // バッファパラメータの名前を取得
   const paramNames = bufferParams.map(param => param.name);
   
-  // バッファタイプの配列を生成
-  const bufferTypes = bufferParams.map(param => 
+  // バッファタイプの配列を生成（ユニフォームバッファを含む）
+  const bufferTypes = ['uniform', ...bufferParams.map(param => 
     param.access === 'read' ? 'read-only-storage' : 'storage'
-  );
+  )];
   
   return `
 // WebGPUラッパー関数
 function ${funcName}(${paramNames.join(', ')}) {
-  // バッファタイプの配列
-  const bufferTypes = [${bufferTypes.map(type => `'${type}'`).join(', ')}];
-  
   // シェーダー情報を返す（実行はしない）
   return {
     name: '${funcName}',
-    code: shaderCode.${funcName},
+    code1d: shaderCode.${funcName}_1d,
+    code2d: shaderCode.${funcName}_2d,
     buffers: [${paramNames.join(', ')}],
-    bufferTypes: bufferTypes
+    bufferTypes: [${bufferTypes.map(type => `'${type}'`).join(', ')}]
   };
 }
 `;
@@ -136,10 +162,35 @@ async function dispatch(shaderInfo, threadCount) {
     throw new Error('threadCount must be specified');
   }
   
+  // threadCountの型に基づいて次元を判定
+  const is2D = Array.isArray(threadCount) || 
+               (typeof threadCount === 'object' && threadCount !== null && 
+                'width' in threadCount && 'height' in threadCount);
+  
+  // 次元に応じたコードとパラメータを選択
+  const code = is2D ? shaderInfo.code2d : shaderInfo.code1d;
+  
+  // ユニフォームバッファのデータを準備
+  let uniformData;
+  if (is2D) {
+    // 2次元の場合
+    let width, height;
+    if (Array.isArray(threadCount)) {
+      [width, height] = threadCount;
+    } else {
+      width = threadCount.width;
+      height = threadCount.height;
+    }
+    uniformData = { width: width, height, is_2d: 1 };
+  } else {
+    // 1次元の場合
+    uniformData = { width: threadCount, height: 1, is_2d: 0 };
+  }
+  
   return AxRuntime.executeShader(
     shaderInfo.name,
-    shaderInfo.code,
-    shaderInfo.buffers,
+    code,
+    [uniformData, ...shaderInfo.buffers],
     shaderInfo.bufferTypes,
     threadCount
   );
@@ -210,9 +261,13 @@ function transpile(source) {
     result += 'const shaderCode = {\n';
     
     const entries = Object.entries(wgslShaders);
-    for (let i = 0; i < entries.length; i++) {
-      const [name, code] = entries[i];
-      result += `  ${name}: \`${code}\`${i < entries.length - 1 ? ',' : ''}\n`;
+    let i = 0;
+    for (const [name, codes] of entries) {
+      // 1次元シェーダーコード
+      result += `  ${name}_1d: \`${codes['1d']}\`,\n`;
+      // 2次元シェーダーコード
+      result += `  ${name}_2d: \`${codes['2d']}\`${i < entries.length - 1 ? ',' : ''}\n`;
+      i++;
     }
     
     result += '};\n';
