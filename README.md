@@ -1,6 +1,6 @@
 # AccelScript
 
-AccelScriptはJavaScriptとWGSLを単一ファイルに記述し、シェーダを通常のJavaScript関数に近い形で簡単に実行するためのトランスパイラーとランタイムライブラリです。
+**AccelScript**はJavaScriptとシェーダを単一ファイルに記述し、シェーダを通常のJavaScript関数に近い形で簡単に実行するための概念実証トランスパイラー兼ランタイムライブラリです。
 
 ## Example
 
