@@ -654,6 +654,7 @@ export class AxRuntime {
           targets: [
             {
               format: this.#format,
+              writeMask: GPUColorWrite.ALL,
             },
           ],
         },

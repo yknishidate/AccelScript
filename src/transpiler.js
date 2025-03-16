@@ -299,11 +299,26 @@ function convertToVertexWGSL(functionInfo) {
     outputDeclarations = ') {\n  ';
   }
   
+  // 関数本体を処理
+  let processedBody = functionInfo.body;
+  
+  // @out 属性を持つパラメータの参照を output.パラメータ名 に置き換える
+  processedBody = processedBody.replace(/@out\s+(\w+)/g, 'output.$1');
+  
+  // 出力パラメータの直接参照を output.パラメータ名 に置き換える
+  for (const param of outputParams) {
+    const paramName = param.name;
+    // 正規表現で paramName = ... のパターンを検出して置き換え
+    // ただし、既に output.paramName となっているものは除外
+    const regex = new RegExp(`(?<!output\\.)(${paramName})\\s*=`, 'g');
+    processedBody = processedBody.replace(regex, 'output.$1 =');
+  }
+  
   // WGSLコードを生成
   const wgslCode = `${outputStruct}${bufferBindings}
 @vertex
 fn ${functionInfo.name}(
-  ${inputDeclarations}${outputDeclarations}${functionInfo.body.replace(/@out\s+(\w+)/g, 'output.$1')}
+  ${inputDeclarations}${outputDeclarations}${processedBody}
   ${outputParams.length > 0 ? '\n  return output;' : ''}
 }
 `;
@@ -352,26 +367,54 @@ function convertToFragmentWGSL(functionInfo) {
   
   // 出力パラメータを生成
   const outputParams = params.filter(p => ['out_builtin', 'out_location'].includes(p.kind));
+  let outputStruct = '';
   let outputDeclarations = '';
   
   if (outputParams.length > 0) {
-    outputDeclarations = ') {\n  ';
+    // 出力構造体を生成
+    outputStruct = 'struct FragmentOutput {\n';
     for (const param of outputParams) {
       if (param.kind === 'out_builtin') {
-        outputDeclarations += `var ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''};\n  `;
+        outputStruct += `  @builtin(${param.builtin}) ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''},\n`;
       } else if (param.kind === 'out_location') {
-        outputDeclarations += `var ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''};\n  `;
+        outputStruct += `  @location(${param.location}) ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''},\n`;
       }
     }
+    outputStruct += '};\n\n';
+    
+    // 関数の戻り値型と出力変数の宣言
+    outputDeclarations = ') -> FragmentOutput {\n  var output: FragmentOutput;\n  ';
   } else {
     outputDeclarations = ') {\n  ';
   }
   
+  // 関数本体を処理
+  let processedBody = functionInfo.body;
+  
+  // 出力パラメータの参照を処理
+  if (outputParams.length > 0) {
+    // @out 属性を持つパラメータの参照を output.パラメータ名 に置き換える
+    processedBody = processedBody.replace(/@out\s+(\w+)/g, 'output.$1');
+    
+    // 出力パラメータの直接参照を output.パラメータ名 に置き換える
+    for (const param of outputParams) {
+      const paramName = param.name;
+      // 正規表現で paramName = ... のパターンを検出して置き換え
+      // ただし、既に output.paramName となっているものは除外
+      const regex = new RegExp(`(?<!output\\.)(${paramName})\\s*=`, 'g');
+      processedBody = processedBody.replace(regex, 'output.$1 =');
+    }
+  } else {
+    // 出力パラメータがない場合は @out 属性を削除
+    processedBody = processedBody.replace(/@out\s+/g, '');
+  }
+  
   // WGSLコードを生成
-  const wgslCode = `${bufferBindings}
+  const wgslCode = `${outputStruct}${bufferBindings}
 @fragment
 fn ${functionInfo.name}(
-  ${inputDeclarations}${outputDeclarations}${functionInfo.body.replace(/@out\s+(\w+)/g, '$1')}
+  ${inputDeclarations}${outputDeclarations}${processedBody}
+  ${outputParams.length > 0 ? '\n  return output;' : ''}
 }
 `;
   
