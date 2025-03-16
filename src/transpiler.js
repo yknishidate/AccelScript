@@ -4,24 +4,32 @@ const t = require('@babel/types');
 const generate = require('@babel/generator').default;
 
 /**
- * @compute属性を持つ関数を抽出する前処理
+ * シェーダー関数を抽出する前処理
  * @param {string} source JavaScriptのソースコード
- * @returns {{jsCode: string, computeFunctions: Array<{name: string, params: string[], body: string}>}}
+ * @returns {{jsCode: string, computeFunctions: Array<{name: string, params: string[], body: string}>, vertexFunctions: Array<{name: string, params: string[], body: string}>, fragmentFunctions: Array<{name: string, params: string[], body: string}>}}
  */
 function preprocess(source) {
   // 結果を格納するオブジェクト
   const result = {
     jsCode: source,
-    computeFunctions: []
+    computeFunctions: [],
+    vertexFunctions: [],
+    fragmentFunctions: []
   };
 
   // @compute属性を持つ関数を検出する正規表現
   // デコレータ構文: @compute\nfunction name(...) {...}
-  const decoratorRegex = /@compute\s*\n\s*function\s+(\w+)\s*\(([^)]*)\)\s*{([\s\S]*?)}/g;
+  const computeRegex = /@compute[\s\n]+function\s+(\w+)\s*\(([^)]*)\)\s*{([\s\S]*?)}/g;
+  
+  // @vertex属性を持つ関数を検出する正規表現（改良版）
+  const vertexRegex = /@vertex[\s\n]+function\s+(\w+)\s*\(([^{]*)\)\s*{([\s\S]*?)}/g;
+
+  // @fragment属性を持つ関数を検出する正規表現（改良版）
+  const fragmentRegex = /@fragment[\s\n]+function\s+(\w+)\s*\(([^{]*)\)\s*{([\s\S]*?)}/g;
   
   // @compute属性を持つ関数を検出し、JSコードから除外する
   let match;
-  while ((match = decoratorRegex.exec(source)) !== null) {
+  while ((match = computeRegex.exec(source)) !== null) {
     const fullMatch = match[0];
     const functionName = match[1];
     const params = match[2].split(',').map(param => param.trim()).filter(Boolean);
@@ -38,21 +46,128 @@ function preprocess(source) {
     result.jsCode = result.jsCode.replace(fullMatch, '');
   }
   
+  // @vertex属性を持つ関数を検出し、JSコードから除外する
+  while ((match = vertexRegex.exec(source)) !== null) {
+    const fullMatch = match[0];
+    const functionName = match[1];
+    const params = match[2].split(',').map(param => param.trim()).filter(Boolean);
+    const functionBody = match[3];
+    
+    // 検出した関数情報を保存
+    result.vertexFunctions.push({
+      name: functionName,
+      params,
+      body: functionBody
+    });
+    
+    // JSコードから@vertex関数を除外
+    result.jsCode = result.jsCode.replace(fullMatch, '');
+  }
+  
+  // @fragment属性を持つ関数を検出し、JSコードから除外する
+  while ((match = fragmentRegex.exec(source)) !== null) {
+    const fullMatch = match[0];
+    const functionName = match[1];
+    const params = match[2].split(',').map(param => param.trim()).filter(Boolean);
+    const functionBody = match[3];
+    
+    // 検出した関数情報を保存
+    result.fragmentFunctions.push({
+      name: functionName,
+      params,
+      body: functionBody
+    });
+    
+    // JSコードから@fragment関数を除外
+    result.jsCode = result.jsCode.replace(fullMatch, '');
+  }
+  
   return result;
 }
 
 /**
- * バッファ型情報を解析する
- * @param {string} paramStr パラメータ文字列（例: "inputA: read<f32[]>"）
- * @returns {{name: string, access: string, type: string}} バッファ情報
+ * パラメータ型情報を解析する
+ * @param {string} paramStr パラメータ文字列
+ * @returns {Object} パラメータ情報
  */
-function parseBufferType(paramStr) {
-  // パラメータ文字列を解析（例: "inputA: read<f32[]>"）
-  const match = paramStr.match(/(\w+)\s*:\s*(read|write)<(\w+)(?:\[\])?>/);
-  if (!match) return null;
+function parseParamType(paramStr) {
+  // バッファ型の解析（例: "inputA: read<f32[]>"）
+  const bufferMatch = paramStr.match(/(\w+)\s*:\s*(read|write)<(\w+)(?:\[\])?>/);
+  if (bufferMatch) {
+    const [, name, access, type] = bufferMatch;
+    return { 
+      kind: 'buffer',
+      name, 
+      access, 
+      type 
+    };
+  }
   
-  const [, name, access, type] = match;
-  return { name, access, type };
+  // ビルトイン属性の解析（例: "@builtin(vertex_index) vertexIndex: u32"）
+  const builtinMatch = paramStr.match(/@builtin\((\w+)\)\s+(\w+)\s*:\s*(\w+)(?:<([^>]+)>)?/);
+  if (builtinMatch) {
+    const [, builtin, name, type, templateType] = builtinMatch;
+    return { 
+      kind: 'builtin',
+      name, 
+      builtin, 
+      type,
+      templateType
+    };
+  }
+  
+  // ロケーション属性の解析（例: "@location(0) position: vec3<f32>"）
+  const locationMatch = paramStr.match(/@location\((\d+)\)\s+(\w+)\s*:\s*(\w+)(?:<([^>]+)>)?/);
+  if (locationMatch) {
+    const [, location, name, type, templateType] = locationMatch;
+    return { 
+      kind: 'location',
+      name, 
+      location: parseInt(location), 
+      type,
+      templateType
+    };
+  }
+  
+  // 出力パラメータの解析（例: "@location(0) @out color: vec4<f32>"）
+  const outLocationMatch = paramStr.match(/@location\((\d+)\)\s+@out\s+(\w+)\s*:\s*(\w+)(?:<([^>]+)>)?/);
+  if (outLocationMatch) {
+    const [, location, name, type, templateType] = outLocationMatch;
+    return { 
+      kind: 'out_location',
+      name, 
+      location: parseInt(location), 
+      type,
+      templateType
+    };
+  }
+  
+  // ビルトイン出力属性の解析（例: "@builtin(position) @out pos: vec4<f32>"）
+  const outBuiltinMatch = paramStr.match(/@builtin\((\w+)\)\s+@out\s+(\w+)\s*:\s*(\w+)(?:<([^>]+)>)?/);
+  if (outBuiltinMatch) {
+    const [, builtin, name, type, templateType] = outBuiltinMatch;
+    return { 
+      kind: 'out_builtin',
+      name, 
+      builtin, 
+      type,
+      templateType
+    };
+  }
+  
+  // 通常の型の解析（例: "scale: f32"）
+  const normalMatch = paramStr.match(/(\w+)\s*:\s*(\w+)(?:<([^>]+)>)?/);
+  if (normalMatch) {
+    const [, name, type, templateType] = normalMatch;
+    return { 
+      kind: 'normal',
+      name, 
+      type,
+      templateType
+    };
+  }
+  
+  return null;
 }
 
 /**
@@ -64,8 +179,8 @@ function convertToWGSL(functionInfo) {
   // バッファパラメータを解析
   const bufferParams = [];
   for (const param of functionInfo.params) {
-    const bufferInfo = parseBufferType(param);
-    if (bufferInfo) {
+    const bufferInfo = parseParamType(param);
+    if (bufferInfo && bufferInfo.kind === 'buffer') {
       bufferParams.push(bufferInfo);
     }
   }
@@ -125,12 +240,151 @@ fn ${functionInfo.name}(@builtin(global_invocation_id) global_id: vec3<u32>) {
 }
 
 /**
- * ラッパー関数を生成する
+ * JavaScript関数をWGSLの頂点シェーダーに変換する
+ * @param {{name: string, params: string[], body: string}} functionInfo 関数情報
+ * @returns {string} WGSLコード
+ */
+function convertToVertexWGSL(functionInfo) {
+  // パラメータを解析
+  const params = [];
+  for (const param of functionInfo.params) {
+    const paramInfo = parseParamType(param);
+    if (paramInfo) {
+      params.push(paramInfo);
+    }
+  }
+  
+  // バッファパラメータを抽出
+  const bufferParams = params.filter(p => p.kind === 'buffer');
+  
+  // バッファバインディングを生成
+  let bufferBindings = '';
+  for (let i = 0; i < bufferParams.length; i++) {
+    const { name, access, type } = bufferParams[i];
+    const storageAccess = access === 'read' ? 'read' : 'read_write';
+    bufferBindings += `@group(0) @binding(${i}) var<storage, ${storageAccess}> ${name}: array<${type}>;\n`;
+  }
+  
+  // 入力パラメータを生成
+  const inputParams = params.filter(p => ['builtin', 'location', 'normal'].includes(p.kind));
+  let inputDeclarations = '';
+  for (const param of inputParams) {
+    if (param.kind === 'builtin') {
+      inputDeclarations += `@builtin(${param.builtin}) ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''},\n  `;
+    } else if (param.kind === 'location') {
+      inputDeclarations += `@location(${param.location}) ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''},\n  `;
+    } else {
+      inputDeclarations += `${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''},\n  `;
+    }
+  }
+  
+  // 出力パラメータを生成
+  const outputParams = params.filter(p => ['out_builtin', 'out_location'].includes(p.kind));
+  let outputStruct = '';
+  let outputDeclarations = '';
+  
+  if (outputParams.length > 0) {
+    outputStruct = 'struct VertexOutput {\n';
+    for (const param of outputParams) {
+      if (param.kind === 'out_builtin') {
+        outputStruct += `  @builtin(${param.builtin}) ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''},\n`;
+      } else if (param.kind === 'out_location') {
+        outputStruct += `  @location(${param.location}) ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''},\n`;
+      }
+    }
+    outputStruct += '};\n\n';
+    
+    outputDeclarations = ') -> VertexOutput {\n  var output: VertexOutput;\n  ';
+  } else {
+    outputDeclarations = ') {\n  ';
+  }
+  
+  // WGSLコードを生成
+  const wgslCode = `${outputStruct}${bufferBindings}
+@vertex
+fn ${functionInfo.name}(
+  ${inputDeclarations}${outputDeclarations}${functionInfo.body.replace(/@out\s+(\w+)/g, 'output.$1')}
+  ${outputParams.length > 0 ? '\n  return output;' : ''}
+}
+`;
+  
+  return wgslCode;
+}
+
+/**
+ * JavaScript関数をWGSLのフラグメントシェーダーに変換する
+ * @param {{name: string, params: string[], body: string}} functionInfo 関数情報
+ * @returns {string} WGSLコード
+ */
+function convertToFragmentWGSL(functionInfo) {
+  // パラメータを解析
+  const params = [];
+  for (const param of functionInfo.params) {
+    const paramInfo = parseParamType(param);
+    if (paramInfo) {
+      params.push(paramInfo);
+    }
+  }
+  
+  // バッファパラメータを抽出
+  const bufferParams = params.filter(p => p.kind === 'buffer');
+  
+  // バッファバインディングを生成
+  let bufferBindings = '';
+  for (let i = 0; i < bufferParams.length; i++) {
+    const { name, access, type } = bufferParams[i];
+    const storageAccess = access === 'read' ? 'read' : 'read_write';
+    bufferBindings += `@group(0) @binding(${i}) var<storage, ${storageAccess}> ${name}: array<${type}>;\n`;
+  }
+  
+  // 入力パラメータを生成
+  const inputParams = params.filter(p => ['builtin', 'location', 'normal'].includes(p.kind));
+  let inputDeclarations = '';
+  for (const param of inputParams) {
+    if (param.kind === 'builtin') {
+      inputDeclarations += `@builtin(${param.builtin}) ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''},\n  `;
+    } else if (param.kind === 'location') {
+      inputDeclarations += `@location(${param.location}) ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''},\n  `;
+    } else {
+      inputDeclarations += `${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''},\n  `;
+    }
+  }
+  
+  // 出力パラメータを生成
+  const outputParams = params.filter(p => ['out_builtin', 'out_location'].includes(p.kind));
+  let outputDeclarations = '';
+  
+  if (outputParams.length > 0) {
+    outputDeclarations = ') {\n  ';
+    for (const param of outputParams) {
+      if (param.kind === 'out_builtin') {
+        outputDeclarations += `var ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''};\n  `;
+      } else if (param.kind === 'out_location') {
+        outputDeclarations += `var ${param.name}: ${param.type}${param.templateType ? `<${param.templateType}>` : ''};\n  `;
+      }
+    }
+  } else {
+    outputDeclarations = ') {\n  ';
+  }
+  
+  // WGSLコードを生成
+  const wgslCode = `${bufferBindings}
+@fragment
+fn ${functionInfo.name}(
+  ${inputDeclarations}${outputDeclarations}${functionInfo.body.replace(/@out\s+(\w+)/g, '$1')}
+}
+`;
+  
+  return wgslCode;
+}
+
+/**
+ * コンピュートシェーダー用のラッパー関数を生成する
  * @param {string} funcName 関数名
  * @param {Array<{name: string, access: string, type: string}>} bufferParams バッファパラメータ
  * @returns {string} ラッパー関数のコード
  */
-function generateWrapperFunction(funcName, bufferParams) {
+function generateComputeWrapperFunction(funcName, bufferParams) {
   // バッファパラメータの名前を取得
   const paramNames = bufferParams.map(param => param.name);
   
@@ -155,6 +409,117 @@ function ${funcName}(${paramNames.join(', ')}) {
 }
 
 /**
+ * 頂点シェーダー用のラッパー関数を生成する
+ * @param {string} funcName 関数名
+ * @param {Array<Object>} params パラメータ情報
+ * @returns {string} ラッパー関数のコード
+ */
+function generateVertexWrapperFunction(funcName, params) {
+  // バッファパラメータの名前を取得
+  const bufferParams = params.filter(p => p.kind === 'buffer');
+  const paramNames = bufferParams.map(param => param.name);
+  
+  // バッファタイプの配列を生成
+  const bufferTypes = bufferParams.map(param => 
+    param.access === 'read' ? 'read-only-storage' : 'storage'
+  );
+  
+  return `
+// 頂点シェーダーラッパー関数
+function ${funcName}(${paramNames.join(', ')}) {
+  // シェーダー情報を返す（実行はしない）
+  return {
+    type: 'vertex',
+    name: '${funcName}',
+    code: shaderCode.${funcName},
+    buffers: [${paramNames.join(', ')}],
+    bufferTypes: [${bufferTypes.map(type => `'${type}'`).join(', ')}]
+  };
+}
+`;
+}
+
+/**
+ * フラグメントシェーダー用のラッパー関数を生成する
+ * @param {string} funcName 関数名
+ * @param {Array<Object>} params パラメータ情報
+ * @returns {string} ラッパー関数のコード
+ */
+function generateFragmentWrapperFunction(funcName, params) {
+  // バッファパラメータの名前を取得
+  const bufferParams = params.filter(p => p.kind === 'buffer');
+  const paramNames = bufferParams.map(param => param.name);
+  
+  // バッファタイプの配列を生成
+  const bufferTypes = bufferParams.map(param => 
+    param.access === 'read' ? 'read-only-storage' : 'storage'
+  );
+  
+  return `
+// フラグメントシェーダーラッパー関数
+function ${funcName}(${paramNames.join(', ')}) {
+  // シェーダー情報を返す（実行はしない）
+  return {
+    type: 'fragment',
+    name: '${funcName}',
+    code: shaderCode.${funcName},
+    buffers: [${paramNames.join(', ')}],
+    bufferTypes: [${bufferTypes.map(type => `'${type}'`).join(', ')}]
+  };
+}
+`;
+}
+
+/**
+ * レンダリングパイプライン作成関数を生成する
+ * @returns {string} レンダリングパイプライン作成関数のコード
+ */
+function generateCreateRenderPipelineFunction() {
+  return `
+// レンダリングパイプライン作成関数
+function createRenderPipeline(vertexShader, fragmentShader, options = {}) {
+  return {
+    type: 'render_pipeline',
+    vertexShader,
+    fragmentShader,
+    primitiveTopology: options.primitiveTopology || 'triangle-list',
+    cullMode: options.cullMode || 'none',
+    format: options.format || 'bgra8unorm'
+  };
+}
+`;
+}
+
+/**
+ * レンダリング実行関数を生成する
+ * @returns {string} レンダリング実行関数のコード
+ */
+function generateRenderFunction() {
+  return `
+// レンダリング実行関数
+async function render(renderPipeline, options = {}) {
+  if (!renderPipeline || renderPipeline.type !== 'render_pipeline') {
+    throw new Error('Invalid render pipeline');
+  }
+  
+  return AxRuntime.executeRenderPipeline(
+    renderPipeline.vertexShader,
+    renderPipeline.fragmentShader,
+    {
+      vertexCount: options.vertexCount || 0,
+      instanceCount: options.instanceCount || 1,
+      firstVertex: options.firstVertex || 0,
+      firstInstance: options.firstInstance || 0,
+      primitiveTopology: renderPipeline.primitiveTopology,
+      cullMode: renderPipeline.cullMode,
+      format: renderPipeline.format
+    }
+  );
+}
+`;
+}
+
+/**
  * ランタイムライブラリのインポート文を生成する
  * @returns {string} インポート文
  */
@@ -163,26 +528,35 @@ function generateImports() {
 }
 
 /**
- * ソースコードを変換し、@compute関数をWGSLに変換してJSに埋め込む
+ * ソースコードを変換し、シェーダー関数をWGSLに変換してJSに埋め込む
  * @param {string} source JavaScriptのソースコード
  * @returns {string} 変換後のJavaScriptコード
  */
 function transpile(source) {
-  // 1. 前処理: @compute関数を抽出
-  const { jsCode, computeFunctions } = preprocess(source);
+  console.log('source:', source);
+
+  // 1. 前処理: シェーダー関数を抽出
+  const { jsCode, computeFunctions, vertexFunctions, fragmentFunctions } = preprocess(source);
+  console.log('jsCode:', jsCode);
+  console.log('computeFunctions:', computeFunctions);
+  console.log('vertexFunctions:', vertexFunctions);
+  console.log('fragmentFunctions:', fragmentFunctions);
   
   // 2. 残りのJSコードをASTに変換
   const ast = parser.parse(jsCode, {
-    sourceType: 'module'
+    sourceType: 'module',
+    plugins: ['decorators-legacy']
   });
   
   // 3. ASTをJavaScriptに変換
   let result = generate(ast).code;
   
-  // 4. 各@compute関数をWGSLに変換
+  // 4. 各シェーダー関数をWGSLに変換
   const wgslShaders = {};
   const wrapperFunctions = [];
+  let hasRenderingFunctions = false;
   
+  // コンピュートシェーダーの変換
   for (const funcInfo of computeFunctions) {
     // WGSLコードを生成
     wgslShaders[funcInfo.name] = convertToWGSL(funcInfo);
@@ -190,14 +564,52 @@ function transpile(source) {
     // バッファパラメータを解析
     const bufferParams = [];
     for (const param of funcInfo.params) {
-      const bufferInfo = parseBufferType(param);
-      if (bufferInfo) {
+      const bufferInfo = parseParamType(param);
+      if (bufferInfo && bufferInfo.kind === 'buffer') {
         bufferParams.push(bufferInfo);
       }
     }
     
     // ラッパー関数を生成
-    wrapperFunctions.push(generateWrapperFunction(funcInfo.name, bufferParams));
+    wrapperFunctions.push(generateComputeWrapperFunction(funcInfo.name, bufferParams));
+  }
+  
+  // 頂点シェーダーの変換
+  for (const funcInfo of vertexFunctions) {
+    // WGSLコードを生成
+    wgslShaders[funcInfo.name] = convertToVertexWGSL(funcInfo);
+    
+    // パラメータを解析
+    const params = [];
+    for (const param of funcInfo.params) {
+      const paramInfo = parseParamType(param);
+      if (paramInfo) {
+        params.push(paramInfo);
+      }
+    }
+    
+    // ラッパー関数を生成
+    wrapperFunctions.push(generateVertexWrapperFunction(funcInfo.name, params));
+    hasRenderingFunctions = true;
+  }
+  
+  // フラグメントシェーダーの変換
+  for (const funcInfo of fragmentFunctions) {
+    // WGSLコードを生成
+    wgslShaders[funcInfo.name] = convertToFragmentWGSL(funcInfo);
+    
+    // パラメータを解析
+    const params = [];
+    for (const param of funcInfo.params) {
+      const paramInfo = parseParamType(param);
+      if (paramInfo) {
+        params.push(paramInfo);
+      }
+    }
+    
+    // ラッパー関数を生成
+    wrapperFunctions.push(generateFragmentWrapperFunction(funcInfo.name, params));
+    hasRenderingFunctions = true;
   }
   
   // 5. シェーダーコードをJSに埋め込む
@@ -208,19 +620,41 @@ function transpile(source) {
     // ラッパー関数を追加
     result += '\n\n// WebGPU Wrapper Functions\n';
     result += wrapperFunctions.join('\n');
+    
+    // レンダリング関連の関数を追加（頂点またはフラグメントシェーダーがある場合）
+    if (hasRenderingFunctions) {
+      result += '\n\n// Rendering Functions\n';
+      result += generateCreateRenderPipelineFunction();
+      result += generateRenderFunction();
+    }
 
     // シェーダーコードを追加
     result += '\n\n// Generated WGSL Shader Code\n';
     result += 'const shaderCode = {\n';
     
-    const entries = Object.entries(wgslShaders);
-    let i = 0;
-    for (const [name, codes] of entries) {
+    // コンピュートシェーダーコード
+    const computeEntries = Object.entries(wgslShaders).filter(([name]) => 
+      computeFunctions.some(func => func.name === name)
+    );
+    
+    for (let i = 0; i < computeEntries.length; i++) {
+      const [name, codes] = computeEntries[i];
       // 1次元シェーダーコード
       result += `  ${name}_1d: \`${codes['1d']}\`,\n`;
       // 2次元シェーダーコード
-      result += `  ${name}_2d: \`${codes['2d']}\`${i < entries.length - 1 ? ',' : ''}\n`;
-      i++;
+      result += `  ${name}_2d: \`${codes['2d']}\`${i < computeEntries.length - 1 || vertexFunctions.length > 0 || fragmentFunctions.length > 0 ? ',' : ''}\n`;
+    }
+    
+    // 頂点シェーダーコード
+    for (let i = 0; i < vertexFunctions.length; i++) {
+      const name = vertexFunctions[i].name;
+      result += `  ${name}: \`${wgslShaders[name]}\`${i < vertexFunctions.length - 1 || fragmentFunctions.length > 0 ? ',' : ''}\n`;
+    }
+    
+    // フラグメントシェーダーコード
+    for (let i = 0; i < fragmentFunctions.length; i++) {
+      const name = fragmentFunctions[i].name;
+      result += `  ${name}: \`${wgslShaders[name]}\`${i < fragmentFunctions.length - 1 ? ',' : ''}\n`;
     }
     
     result += '};\n';
@@ -231,6 +665,9 @@ function transpile(source) {
 
 module.exports = {
   preprocess,
+  parseParamType,
   convertToWGSL,
+  convertToVertexWGSL,
+  convertToFragmentWGSL,
   transpile
 };

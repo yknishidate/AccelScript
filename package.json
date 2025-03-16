@@ -17,5 +17,13 @@
     "@babel/parser": "^7.26.10",
     "@babel/traverse": "^7.26.10",
     "@babel/types": "^7.26.10"
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-decorators": "^7.25.9"
+  },
+  "babel": {
+    "plugins": [
+      ["@babel/plugin-proposal-decorators", { "legacy": true }]
+    ]
   }
 }

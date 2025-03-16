@@ -474,7 +474,8 @@ export class AxRuntime {
   static #device = null;
   static #initialized = false;
   static #shaderModules = new Map();
-  static #pipelines = new Map();
+  static #computePipelines = new Map();
+  static #renderPipelines = new Map();
   static #canvas = null;
   static #context = null;
   static #format = 'bgra8unorm';
@@ -501,7 +502,8 @@ export class AxRuntime {
     if (canvas) {
       this.#canvas = canvas;
       this.#context = canvas.getContext('webgpu');
-      this.#format = this.#context.getPreferredFormat(adapter);
+      // this.#format = this.#context.getPreferredFormat(adapter);
+      this.#format = navigator.gpu.getPreferredCanvasFormat();
       this.#context.configure({
         device: this.#device,
         format: this.#format,
@@ -546,11 +548,11 @@ export class AxRuntime {
    * @param {Array<string>} bufferTypes バッファタイプの配列
    * @returns {{pipeline: GPUComputePipeline, bindGroupLayout: GPUBindGroupLayout}} パイプラインとバインドグループレイアウト
    */
-  static getPipeline(name, shaderModule, bufferTypes) {
+  static getComputePipeline(name, shaderModule, bufferTypes) {
     // パイプライン名に次元情報が含まれているか確認
     const pipelineName = name;
     
-    if (!this.#pipelines.has(pipelineName)) {
+    if (!this.#computePipelines.has(pipelineName)) {
       const device = this.getDevice();
       
       // バインドグループレイアウトを作成
@@ -582,10 +584,89 @@ export class AxRuntime {
         }
       });
       
-      this.#pipelines.set(pipelineName, { pipeline, bindGroupLayout });
+      this.#computePipelines.set(pipelineName, { pipeline, bindGroupLayout });
     }
     
-    return this.#pipelines.get(pipelineName);
+    return this.#computePipelines.get(pipelineName);
+  }
+  
+  /**
+   * レンダリングパイプラインを作成または取得する
+   * @param {string} vertexShaderName 頂点シェーダー名
+   * @param {GPUShaderModule} vertexShaderModule 頂点シェーダーモジュール
+   * @param {string} fragmentShaderName フラグメントシェーダー名
+   * @param {GPUShaderModule} fragmentShaderModule フラグメントシェーダーモジュール
+   * @param {Array<string>} vertexBufferTypes 頂点シェーダーのバッファタイプの配列
+   * @param {Array<string>} fragmentBufferTypes フラグメントシェーダーのバッファタイプの配列
+   * @param {Object} options レンダリングパイプラインのオプション
+   * @returns {{pipeline: GPURenderPipeline, bindGroupLayout: GPUBindGroupLayout}} パイプラインとバインドグループレイアウト
+   */
+  static getRenderPipeline(
+    vertexShaderName, 
+    vertexShaderModule, 
+    fragmentShaderName, 
+    fragmentShaderModule, 
+    vertexBufferTypes, 
+    fragmentBufferTypes,
+    options = {}
+  ) {
+    const pipelineName = `${vertexShaderName}_${fragmentShaderName}`;
+    
+    if (!this.#renderPipelines.has(pipelineName)) {
+      const device = this.getDevice();
+      
+      // 頂点シェーダーのバインドグループレイアウトを作成
+      const vertexEntries = vertexBufferTypes.map((type, i) => ({
+        binding: i,
+        visibility: GPUShaderStage.VERTEX,
+        buffer: { type }
+      }));
+      
+      // フラグメントシェーダーのバインドグループレイアウトを作成
+      const fragmentEntries = fragmentBufferTypes.map((type, i) => ({
+        binding: i + vertexBufferTypes.length,
+        visibility: GPUShaderStage.FRAGMENT,
+        buffer: { type }
+      }));
+      
+      // 両方のエントリーを結合
+      const entries = [...vertexEntries, ...fragmentEntries];
+      
+      const bindGroupLayout = device.createBindGroupLayout({
+        entries
+      });
+      
+      // パイプラインレイアウトを作成
+      const pipelineLayout = device.createPipelineLayout({
+        bindGroupLayouts: [bindGroupLayout]
+      });
+      
+      // レンダリングパイプラインを作成
+      const pipeline = device.createRenderPipeline({
+        layout: pipelineLayout,
+        vertex: {
+          module: vertexShaderModule,
+          entryPoint: vertexShaderName,
+        },
+        fragment: {
+          module: fragmentShaderModule,
+          entryPoint: fragmentShaderName,
+          targets: [
+            {
+              format: this.#format,
+            },
+          ],
+        },
+        primitive: {
+          topology: options.primitiveTopology || 'triangle-list',
+          cullMode: options.cullMode || 'none',
+        },
+      });
+      
+      this.#renderPipelines.set(pipelineName, { pipeline, bindGroupLayout });
+    }
+    
+    return this.#renderPipelines.get(pipelineName);
   }
 
   /**
@@ -695,7 +776,7 @@ export class AxRuntime {
     const shaderModule = this.getShaderModule(name, code);
     
     // パイプラインを取得
-    const { pipeline, bindGroupLayout } = this.getPipeline(name, shaderModule, bufferTypes);
+    const { pipeline, bindGroupLayout } = this.getComputePipeline(name, shaderModule, bufferTypes);
     
     // バインドグループを作成
     const entries = gpuBuffers.map((buffer, i) => ({
@@ -744,6 +825,122 @@ export class AxRuntime {
     // 実行後、AxArray型のバッファを同期
     for (let i = 1; i < buffers.length; i++) {
       const buffer = buffers[i];
+      if (buffer instanceof AxFloat32Array || 
+          buffer instanceof AxInt32Array || 
+          buffer instanceof AxUint32Array) {
+        await buffer.afterDispatch();
+      }
+    }
+    
+    // 処理完了を待機（非同期）
+    return Promise.resolve();
+  }
+  
+  /**
+   * レンダリングパイプラインを実行する
+   * @param {Object} vertexShaderInfo 頂点シェーダー情報
+   * @param {Object} fragmentShaderInfo フラグメントシェーダー情報
+   * @param {Object} options レンダリングオプション
+   * @returns {Promise<void>}
+   */
+  static async executeRenderPipeline(vertexShaderInfo, fragmentShaderInfo, options = {}) {
+    if (!this.#context) {
+      throw new Error('Canvas context not initialized. Call AxRuntime.init(canvas) first.');
+    }
+    
+    const device = this.getDevice();
+    
+    // 頂点シェーダーのGPUバッファを取得
+    const vertexGpuBuffers = vertexShaderInfo.buffers.map(buffer => {
+      if (buffer instanceof AxFloat32Array || 
+          buffer instanceof AxInt32Array || 
+          buffer instanceof AxUint32Array) {
+        return buffer.getBuffer();
+      }
+      return buffer;
+    });
+    
+    // フラグメントシェーダーのGPUバッファを取得
+    const fragmentGpuBuffers = fragmentShaderInfo.buffers.map(buffer => {
+      if (buffer instanceof AxFloat32Array || 
+          buffer instanceof AxInt32Array || 
+          buffer instanceof AxUint32Array) {
+        return buffer.getBuffer();
+      }
+      return buffer;
+    });
+    
+    // シェーダーモジュールを取得
+    const vertexShaderModule = this.getShaderModule(vertexShaderInfo.name, vertexShaderInfo.code);
+    const fragmentShaderModule = this.getShaderModule(fragmentShaderInfo.name, fragmentShaderInfo.code);
+    
+    // レンダリングパイプラインを取得
+    const { pipeline, bindGroupLayout } = this.getRenderPipeline(
+      vertexShaderInfo.name,
+      vertexShaderModule,
+      fragmentShaderInfo.name,
+      fragmentShaderModule,
+      vertexShaderInfo.bufferTypes,
+      fragmentShaderInfo.bufferTypes,
+      {
+        primitiveTopology: options.primitiveTopology || 'triangle-list',
+        cullMode: options.cullMode || 'none',
+        format: options.format || this.#format
+      }
+    );
+    
+    // バインドグループを作成
+    const entries = [
+      ...vertexGpuBuffers.map((buffer, i) => ({
+        binding: i,
+        resource: { buffer }
+      })),
+      ...fragmentGpuBuffers.map((buffer, i) => ({
+        binding: i + vertexGpuBuffers.length,
+        resource: { buffer }
+      }))
+    ];
+    
+    const bindGroup = device.createBindGroup({
+      layout: bindGroupLayout,
+      entries
+    });
+    
+    // コマンドエンコーダを作成
+    const commandEncoder = device.createCommandEncoder();
+    
+    // レンダーパスを作成
+    const renderPassDescriptor = {
+      colorAttachments: [
+        {
+          view: this.#context.getCurrentTexture().createView(),
+          loadOp: 'clear',
+          storeOp: 'store',
+          clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
+        },
+      ],
+    };
+    
+    const renderPass = commandEncoder.beginRenderPass(renderPassDescriptor);
+    renderPass.setPipeline(pipeline);
+    renderPass.setBindGroup(0, bindGroup);
+    
+    // 描画コマンドを発行
+    renderPass.draw(
+      options.vertexCount,
+      options.instanceCount || 1,
+      options.firstVertex || 0,
+      options.firstInstance || 0
+    );
+    
+    renderPass.end();
+    
+    // コマンドをキューに送信
+    const commands = commandEncoder.finish();
+    device.queue.submit([commands]);
+    
+    // 実行後、AxArray型のバッファを同期
+    for (const buffer of [...vertexShaderInfo.buffers, ...fragmentShaderInfo.buffers]) {
       if (buffer instanceof AxFloat32Array || 
           buffer instanceof AxInt32Array || 
           buffer instanceof AxUint32Array) {

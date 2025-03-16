@@ -73,11 +73,11 @@ const htmlContent = `
   <h1>AccelScript Demo</h1>
   
   <h2>コード</h2>
-  <pre id="source-code"><code = class="lang-js">${source.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
+  <pre id="source-code"><code class="lang-js">${source.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
   
   <!--
   <h2>トランスパイル後のコード</h2>
-  <pre id="transpiled-code"><code = class="lang-js">${result.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
+  <pre id="transpiled-code"><code class="lang-js">${result.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
   -->
   
   <h2>実行結果</h2>
