@@ -475,12 +475,15 @@ export class AxRuntime {
   static #initialized = false;
   static #shaderModules = new Map();
   static #pipelines = new Map();
+  static #canvas = null;
+  static #context = null;
+  static #format = 'bgra8unorm';
   
   /**
    * WebGPUを初期化する
    * @returns {Promise<GPUDevice>} 初期化されたGPUデバイス
    */
-  static async init() {
+  static async init(canvas = null) {
     if (this.#initialized) return this.#device;
     
     if (!navigator.gpu) {
@@ -494,6 +497,16 @@ export class AxRuntime {
     
     this.#device = await adapter.requestDevice();
     this.#initialized = true;
+
+    if (canvas) {
+      this.#canvas = canvas;
+      this.#context = canvas.getContext('webgpu');
+      this.#format = this.#context.getPreferredFormat(adapter);
+      this.#context.configure({
+        device: this.#device,
+        format: this.#format,
+      });
+    }
     
     return this.#device;
   }
