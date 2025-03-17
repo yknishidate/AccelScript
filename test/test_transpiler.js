@@ -39,6 +39,32 @@ describe('preprocess and extractFunctions', () => {
     });
     expect(result.jsCode.trim()).toBe('const y = 10;');
   });
+
+  test('extracts compute functions with nested blocks', () => {
+    const source = `
+      @compute function complex(a: read<f32[]>, b: write<f32[]>) {
+        if (index < 10) {
+          b[index] = a[index] * 2.0;
+        } else {
+          let temp = a[index];
+          {
+            temp = temp + 1.0;
+          }
+          b[index] = temp;
+        }
+      }
+      const z = 15;
+    `;
+    const result = preprocess(source);
+    
+    expect(result.computeFunctions).toHaveLength(1);
+    expect(result.computeFunctions[0]).toEqual({
+      name: 'complex',
+      params: ['a: read<f32[]>', 'b: write<f32[]>'],
+      body: '\n        if (index < 10) {\n          b[index] = a[index] * 2.0;\n        } else {\n          let temp = a[index];\n          {\n            temp = temp + 1.0;\n          }\n          b[index] = temp;\n        }\n      '
+    });
+    expect(result.jsCode.trim()).toBe('const z = 15;');
+  });
 });
 
 describe('parseParamType', () => {
