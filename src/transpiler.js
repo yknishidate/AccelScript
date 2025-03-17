@@ -17,72 +17,41 @@ function preprocess(source) {
     fragmentFunctions: []
   };
 
-  // @compute属性を持つ関数を検出する正規表現
-  // デコレータ構文: @compute\nfunction name(...) {...}
-  const computeRegex = /@compute[\s\n]+function\s+(\w+)\s*\(([^)]*)\)\s*{([\s\S]*?)}/g;
-  
-  // @vertex属性を持つ関数を検出する正規表現（改良版）
-  const vertexRegex = /@vertex[\s\n]+function\s+(\w+)\s*\(([^{]*)\)\s*{([\s\S]*?)}/g;
+  // シェーダー関数を抽出するヘルパー関数を呼び出し
+  result.jsCode = extractFunctions(source, /@compute[\s\n]+function\s+(\w+)\s*\(([^)]*)\)\s*{([\s\S]*?)}/g, 'computeFunctions', result);
+  result.jsCode = extractFunctions(result.jsCode, /@vertex[\s\n]+function\s+(\w+)\s*\(([^{]*)\)\s*{([\s\S]*?)}/g, 'vertexFunctions', result);
+  result.jsCode = extractFunctions(result.jsCode, /@fragment[\s\n]+function\s+(\w+)\s*\(([^{]*)\)\s*{([\s\S]*?)}/g, 'fragmentFunctions', result);
 
-  // @fragment属性を持つ関数を検出する正規表現（改良版）
-  const fragmentRegex = /@fragment[\s\n]+function\s+(\w+)\s*\(([^{]*)\)\s*{([\s\S]*?)}/g;
-  
-  // @compute属性を持つ関数を検出し、JSコードから除外する
-  let match;
-  while ((match = computeRegex.exec(source)) !== null) {
-    const fullMatch = match[0];
-    const functionName = match[1];
-    const params = match[2].split(',').map(param => param.trim()).filter(Boolean);
-    const functionBody = match[3];
-    
-    // 検出した関数情報を保存
-    result.computeFunctions.push({
-      name: functionName,
-      params,
-      body: functionBody
-    });
-    
-    // JSコードから@compute関数を除外
-    result.jsCode = result.jsCode.replace(fullMatch, '');
-  }
-  
-  // @vertex属性を持つ関数を検出し、JSコードから除外する
-  while ((match = vertexRegex.exec(source)) !== null) {
-    const fullMatch = match[0];
-    const functionName = match[1];
-    const params = match[2].split(',').map(param => param.trim()).filter(Boolean);
-    const functionBody = match[3];
-    
-    // 検出した関数情報を保存
-    result.vertexFunctions.push({
-      name: functionName,
-      params,
-      body: functionBody
-    });
-    
-    // JSコードから@vertex関数を除外
-    result.jsCode = result.jsCode.replace(fullMatch, '');
-  }
-  
-  // @fragment属性を持つ関数を検出し、JSコードから除外する
-  while ((match = fragmentRegex.exec(source)) !== null) {
-    const fullMatch = match[0];
-    const functionName = match[1];
-    const params = match[2].split(',').map(param => param.trim()).filter(Boolean);
-    const functionBody = match[3];
-    
-    // 検出した関数情報を保存
-    result.fragmentFunctions.push({
-      name: functionName,
-      params,
-      body: functionBody
-    });
-    
-    // JSコードから@fragment関数を除外
-    result.jsCode = result.jsCode.replace(fullMatch, '');
-  }
-  
   return result;
+}
+
+/**
+ * シェーダー関数を抽出するヘルパー関数
+ * @param {string} source ソースコード
+ * @param {RegExp} regex 正規表現
+ * @param {string} type 関数の種類
+ * @param {Object} result 結果オブジェクト
+ * @returns {string} 関数を除外したソースコード
+ */
+function extractFunctions(source, regex, type, result) {
+  let match;
+  while ((match = regex.exec(source)) !== null) {
+    const fullMatch = match[0];
+    const functionName = match[1];
+    const params = match[2].split(',').map(param => param.trim()).filter(Boolean);
+    const functionBody = match[3];
+
+    // 検出した関数情報を保存
+    result[type].push({
+      name: functionName,
+      params,
+      body: functionBody
+    });
+
+    // JSコードから関数を除外
+    source = source.replace(fullMatch, '');
+  }
+  return source;
 }
 
 /**
