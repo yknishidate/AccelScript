@@ -1,18 +1,32 @@
 import * as acorn from 'acorn';
 
 // AST Node型定義
-interface StructDeclaration {
+interface StructDeclaration extends acorn.Node {
     type: 'StructDeclaration';
     name: acorn.Node & { name: string };
     body: acorn.Node;
+    start: number;
+    end: number;
 }
 
-interface ShaderDeclaration {
-    type: string;
+interface ParamDeclaration extends acorn.Node {
+    name: string;
+    type: { name: string };
+}
+
+type ShaderDeclarationType = 
+    | 'vertexShaderDeclaration'
+    | 'fragmentShaderDeclaration'
+    | 'computeShaderDeclaration';
+
+interface ShaderDeclaration extends acorn.Node {
+    type: ShaderDeclarationType;
     id: acorn.Node & { name: string };
-    params: (acorn.Node & { name: string })[];
+    params: ParamDeclaration[];
     returnType: (acorn.Node & { name: string }) | null;
     body: acorn.Node;
+    start: number;
+    end: number;
 }
 
 type AccelScriptNode = StructDeclaration | ShaderDeclaration;
@@ -28,6 +42,14 @@ type ShaderType = typeof keywords[number];
 function accelScriptPlugin(Parser: typeof acorn.Parser) {
     return class extends Parser {
         declare keywords: { [key: string]: boolean };
+        // acornのメソッドの型定義
+        declare next: () => void;
+        declare parseIdent: (liberal?: boolean) => acorn.Node & { name: string };
+        declare parseBlock: () => acorn.Node;
+        declare expect: (type: any) => void;
+        declare eat: (type: any) => boolean;
+        declare type: any;
+        declare parseStatement: (context: any, topLevel?: boolean, exports?: any) => acorn.Node;
 
         constructor(options: acorn.Options, input: string) {
             super(options, input);
@@ -40,44 +62,55 @@ function accelScriptPlugin(Parser: typeof acorn.Parser) {
 
         // 構造体解析
         parseStruct(): StructDeclaration {
+            const start = this.start;
             this.next(); // structキーワードをスキップ
             const name = this.parseIdent(true);
             const body = this.parseBlock();
             return {
                 type: 'StructDeclaration',
                 name,
-                body
+                body,
+                start,
+                end: body.end
             };
         }
 
         // シェーダー関数解析
         parseShaderFunction(type: ShaderType): ShaderDeclaration {
+            const start = this.start;
             const node: ShaderDeclaration = {
                 type: `${type}ShaderDeclaration`,
                 id: null as any,
                 params: [],
                 returnType: null,
-                body: null as any
+                body: null as any,
+                start,
+                end: start
             };
 
-            this.next(); // シェーダータイプをスキップ
+            this.next();
             node.id = this.parseIdent(true);
             
-            // パラメータの解析
             this.expect(tt.parenL);
             if (!this.eat(tt.parenR)) {
                 do {
-                    node.params.push(this.parseIdent(true));
+                    const paramName = this.parseIdent(true);
+                    this.expect(tt.colon);
+                    const paramType = this.parseIdent(true);
+                    node.params.push({
+                        name: paramName.name,
+                        type: { name: paramType.name }
+                    });
                 } while (this.eat(tt.comma));
                 this.expect(tt.parenR);
             }
 
-            // 戻り値の型解析（存在する場合）
             if (this.eat(tt.arrow)) {
                 node.returnType = this.parseIdent(true);
             }
 
             node.body = this.parseBlock();
+            node.end = node.body.end;
             return node;
         }
 
