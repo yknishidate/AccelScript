@@ -15,24 +15,32 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 enable_testing()
 
 # Find packages
-find_package(ANTLR4 CONFIG REQUIRED)
+find_package(antlr4-runtime CONFIG REQUIRED)
 find_package(GTest CONFIG REQUIRED)
 
-# Set up ANTLR
-include_directories(${ANTLR4_INCLUDE_DIRS})
-
 # Generate ANTLR parser
-find_program(ANTLR_EXECUTABLE antlr4)
-if(NOT ANTLR_EXECUTABLE)
-    set(ANTLR_EXECUTABLE "$ENV{VCPKG_ROOT}/installed/x64-windows/tools/antlr4/antlr4.exe")
-endif()
+add_custom_command(
+    OUTPUT
+        ${CMAKE_CURRENT_BINARY_DIR}/AccelScriptLexer.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/AccelScriptParser.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/AccelScriptVisitor.cpp
+    COMMAND
+        ${ANTLR_EXECUTABLE} -Dlanguage=Cpp -listener -visitor
+        -o ${CMAKE_CURRENT_BINARY_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/AccelScript.g4
+    DEPENDS
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/AccelScript.g4
+)
 
 # Create parser library
 add_library(parser
     src/parser.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/AccelScriptLexer.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/AccelScriptParser.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/AccelScriptVisitor.cpp
 )
 target_link_libraries(parser 
-    PRIVATE antlr4_static
+    PRIVATE antlr4_shared
 )
 target_include_directories(parser PUBLIC src)
 
@@ -43,8 +51,10 @@ add_executable(parser_test
 target_link_libraries(parser_test
     PRIVATE 
         parser
+        GTest::gtest
         GTest::gtest_main
+        GTest::gmock
+        GTest::gmock_main
 )
 
-include(GoogleTest)
-gtest_discover_tests(parser_test)
+add_test(NAME parser_tests COMMAND parser_test)
