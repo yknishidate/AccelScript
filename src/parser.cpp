@@ -1,6 +1,4 @@
 #include "parser.hpp"
-#include "AccelScriptLexer.h"
-#include "AccelScriptParser.h"
 #include "antlr4-runtime.h"
 #include <memory>
 

@@ -21,10 +21,11 @@ struct ShaderDeclaration : Node {
     struct {
         std::string name;
     } id;
-    std::vector<struct {
+    struct Param {
         std::string name;
         std::string type;
-    }> params;
+    };
+    std::vector<Param> params;
     struct {
         std::string name;
     } returnType;

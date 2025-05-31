@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "configurations": [
+      {
+          "name": "Debug ANTLR4 grammar", // 任意の名前
+          "type": "antlr-debug",          // 決め打ち(多分)
+          "request": "launch",            // 決め打ち(多分)
+          "input": "examples/compute_add.axs",
+          "grammar": "src/AccelScript.g4",
+          "printParseTree": true,         // デバッグ結果をデバッグコンソールに表示するか
+          "visualParseTree": true         // デバッグ結果をグラフィカルなツリーで表示するか
+      },
+    ]
+}
