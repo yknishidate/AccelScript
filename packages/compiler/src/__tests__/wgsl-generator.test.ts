@@ -417,7 +417,7 @@ describe('WGSL Generator', () => {
                     }
                     case 1: {
                         let temp2 = 10;
-                        result = temp2 + 5;
+        result = temp2 + 5;
                     }
                 }
                 return result;
@@ -430,5 +430,78 @@ describe('WGSL Generator', () => {
         expect(result).toContain('result = temp * 2;');
         expect(result).toContain('case 1: {');
         expect(result).toContain('var temp2 = 10;');
+    });
+
+    // Ternary operator tests
+    it('should handle basic ternary operator', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testTernary(x: number) {
+                const result = x > 0 ? 1.0 : 0.0;
+                return result;
+            }
+                `);
+        const result = generateWGSL(func);
+        expect(result).toContain('let result = select(0.0, 1.0, x > 0);');
+    });
+
+    it('should handle ternary with expressions', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testTernaryExpr(a: number, b: number) {
+                const result = a > b ? a * 2 : b * 2;
+                return result;
+            }
+                `);
+        const result = generateWGSL(func);
+        expect(result).toContain('let result = select(b * 2, a * 2, a > b);');
+    });
+
+    it('should handle nested ternary operators', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testNestedTernary(x: number, y: number) {
+                const result = x > 0 ? (y > 0 ? 1 : 2) : 3;
+                return result;
+            }
+                `);
+        const result = generateWGSL(func);
+        expect(result).toContain('let result = select(3, (select(2, 1, y > 0)), x > 0);');
+    });
+
+    it('should handle ternary in return statement', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testTernaryReturn(condition: boolean, a: number, b: number) {
+                return condition ? a : b;
+            }
+                `);
+        const result = generateWGSL(func);
+        expect(result).toContain('return select(b, a, condition);');
+    });
+
+    it('should handle ternary with function calls', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testTernaryFuncs(flag: boolean, x: number, y: number) {
+                const result = flag ? sqrt(x) : abs(y);
+                return result;
+            }
+                `);
+        const result = generateWGSL(func);
+        expect(result).toContain('let result = select(abs(y), sqrt(x), flag);');
+    });
+
+    it('should handle ternary in assignment (min function)', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testTernaryAssign(a: number, b: number) {
+                let result = 0.0;
+                result = a < b ? a : b;
+                return result;
+            }
+                `);
+        const result = generateWGSL(func);
+        expect(result).toContain('result = select(b, a, a < b);');
     });
 });

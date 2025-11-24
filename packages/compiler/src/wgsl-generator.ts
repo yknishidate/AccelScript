@@ -386,6 +386,16 @@ function transpileNode(node: Node): string {
         return `(${transpileNode(node.getExpression())})`;
     }
 
+    // Conditional expressions (ternary operator: condition ? a : b)
+    // WGSL uses select(falseValue, trueValue, condition)
+    if (Node.isConditionalExpression(node)) {
+        const condition = transpileNode(node.getCondition());
+        const whenTrue = transpileNode(node.getWhenTrue());
+        const whenFalse = transpileNode(node.getWhenFalse());
+        return `select(${whenFalse}, ${whenTrue}, ${condition})`;
+    }
+
+
     // Variable declaration list (used in for loop initializer)
     if (Node.isVariableDeclarationList(node)) {
         const isConst = node.getDeclarationKind() === VariableDeclarationKind.Const;
