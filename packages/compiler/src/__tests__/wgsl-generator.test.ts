@@ -649,5 +649,63 @@ describe('WGSL Generator', () => {
         expect(result).toContain('if (!(j < 10)) {');
         expect(result).toContain('if (!(i < 10)) {');
     });
+
+    // Keyword support tests
+    it('should handle boolean true keyword', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testTrue() {
+                const flag = true;
+                return flag;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('let flag = true;');
+    });
+
+    it('should handle boolean false keyword', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testFalse() {
+                const flag = false;
+                return flag;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('let flag = false;');
+    });
+
+    it('should handle continue statement', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testContinue() {
+                let sum = 0;
+                for (let i = 0; i < 10; i++) {
+                    if (i === 5) continue;
+                    sum += i;
+                }
+                return sum;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('continue;');
+    });
+
+    it('should handle break statement', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testBreak() {
+                let sum = 0;
+                for (let i = 0; i < 10; i++) {
+                    if (i === 5) break;
+                    sum += i;
+                }
+                return sum;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('break;');
+    });
 });
+
 
