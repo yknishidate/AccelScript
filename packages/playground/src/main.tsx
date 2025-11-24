@@ -4,10 +4,11 @@ import VectorAdd from './demos/VectorAdd.gen'
 import Triangle from './demos/Triangle.gen'
 import Tests from './demos/Tests.gen'
 import Circles from './demos/Circles.gen'
+import Lines from './demos/Lines.gen'
 import ImageDemo from './demos/ImageDemo.gen'
 
 function Layout() {
-    const [demo, setDemo] = useState<"vector" | "triangle" | "tests" | "circles" | "image">("vector");
+    const [demo, setDemo] = useState<"vector" | "triangle" | "tests" | "circles" | "lines" | "image">("vector");
 
     return (
         <div style={{ fontFamily: 'sans-serif' }}>
@@ -31,6 +32,12 @@ function Layout() {
                     Circles (Drawing)
                 </button>
                 <button
+                    onClick={() => setDemo("lines")}
+                    style={{ marginRight: 10, fontWeight: demo === "lines" ? 'bold' : 'normal' }}
+                >
+                    Lines (Drawing)
+                </button>
+                <button
                     onClick={() => setDemo("image")}
                     style={{ marginRight: 10, fontWeight: demo === "image" ? 'bold' : 'normal' }}
                 >
@@ -47,6 +54,7 @@ function Layout() {
                 {demo === "vector" && <VectorAdd />}
                 {demo === "triangle" && <Triangle />}
                 {demo === "circles" && <Circles />}
+                {demo === "lines" && <Lines />}
                 {demo === "image" && <ImageDemo />}
                 {demo === "tests" && <Tests />}
             </main>
