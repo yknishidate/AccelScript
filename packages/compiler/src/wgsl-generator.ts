@@ -281,6 +281,14 @@ function transpileNode(node: Node): string {
         return node.getText();
     }
 
+    // Boolean literals (true, false)
+    if (node.getKind() === SyntaxKind.TrueKeyword) {
+        return 'true';
+    }
+    if (node.getKind() === SyntaxKind.FalseKeyword) {
+        return 'false';
+    }
+
     // If statements with optional else clause
     if (Node.isIfStatement(node)) {
         const cond = transpileNode(node.getExpression());
@@ -310,6 +318,24 @@ function transpileNode(node: Node): string {
         const body = Node.isBlock(statement) ? transpileBlock(statement) : transpileNode(statement);
 
         return `    for (${initStr}; ${condStr}; ${incStr}) {\n${body}\n    }`;
+    }
+
+    // While loops
+    if (Node.isWhileStatement(node)) {
+        const condition = transpileNode(node.getExpression());
+        const statement = node.getStatement();
+        const body = Node.isBlock(statement) ? transpileBlock(statement) : transpileNode(statement);
+        return `    while (${condition}) {\n${body}\n    }`;
+    }
+
+    // Do-while loops (transpiled to WGSL loop with conditional break)
+    if (Node.isDoStatement(node)) {
+        const condition = transpileNode(node.getExpression());
+        const statement = node.getStatement();
+        const body = Node.isBlock(statement) ? transpileBlock(statement) : transpileNode(statement);
+
+        // WGSL doesn't have do-while, use loop with break
+        return `    loop {\n${body}\n        if (!(${condition})) {\n            break;\n        }\n    }`;
     }
 
     // Switch statements

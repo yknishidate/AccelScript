@@ -504,4 +504,150 @@ describe('WGSL Generator', () => {
         const result = generateWGSL(func);
         expect(result).toContain('result = select(b, a, a < b);');
     });
+
+    // While loop tests
+    it('should handle basic while loop', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testWhile() {
+                let i = 0;
+                while (i < 10) {
+                    i++;
+                }
+                return i;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('while (i < 10) {');
+        expect(result).toContain('i++;');
+    });
+
+    it('should handle while with complex condition', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testWhileComplex(x: number, y: number) {
+                while (x > 0 && y < 100) {
+                    x--;
+                    y++;
+                }
+                return x + y;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('while (x > 0 && y < 100) {');
+        expect(result).toContain('x--;');
+        expect(result).toContain('y++;');
+    });
+
+    it('should handle while with break', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testWhileBreak() {
+                let i = 0;
+                while (true) {
+                    if (i > 5) break;
+                    i++;
+                }
+                return i;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('while (true) {');
+        expect(result).toContain('break;');
+    });
+
+    it('should handle nested while loops', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testNestedWhile() {
+                let i = 0;
+                let j = 0;
+                while (i < 10) {
+                    while (j < 10) {
+                        j++;
+                    }
+                    i++;
+                }
+                return i + j;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('while (i < 10) {');
+        expect(result).toContain('while (j < 10) {');
+    });
+
+    // Do-while loop tests
+    it('should handle basic do-while loop', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testDoWhile() {
+                let i = 0;
+                do {
+                    i++;
+                } while (i < 10);
+                return i;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('loop {');
+        expect(result).toContain('i++;');
+        expect(result).toContain('if (!(i < 10)) {');
+        expect(result).toContain('break;');
+    });
+
+    it('should handle do-while with complex condition', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testDoWhileComplex(x: number) {
+                do {
+                    x--;
+                } while (x > 0 && x < 100);
+                return x;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('loop {');
+        expect(result).toContain('x--;');
+        expect(result).toContain('if (!(x > 0 && x < 100)) {');
+    });
+
+    it('should handle do-while with break', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testDoWhileBreak() {
+                let i = 0;
+                do {
+                    if (i > 5) break;
+                    i++;
+                } while (true);
+                return i;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('loop {');
+        expect(result).toContain('if (i > 5)');
+        expect(result).toContain('break;');
+    });
+
+    it('should handle nested do-while loops', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testNestedDoWhile() {
+                let i = 0;
+                let j = 0;
+                do {
+                    do {
+                        j++;
+                    } while (j < 10);
+                    i++;
+                } while (i < 10);
+                return i + j;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('loop {');
+        expect(result).toContain('if (!(j < 10)) {');
+        expect(result).toContain('if (!(i < 10)) {');
+    });
 });
+
