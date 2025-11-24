@@ -1,0 +1,25 @@
+{
+    "name": "playground",
+    "private": true,
+    "version": "0.0.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc && vite build",
+        "preview": "vite preview",
+        "compile": "node ../compiler/dist/index.js src/demos/VectorAdd.tsx -o src/demos/VectorAdd.gen.tsx && node ../compiler/dist/index.js src/demos/Triangle.tsx -o src/demos/Triangle.gen.tsx && node ../compiler/dist/index.js src/demos/Circles.tsx -o src/demos/Circles.gen.tsx && node ../compiler/dist/index.js src/demos/ImageDemo.tsx -o src/demos/ImageDemo.gen.tsx && node ../compiler/dist/index.js src/demos/Tests.tsx -o src/demos/Tests.gen.tsx",
+        "test": "echo \"No tests specified\" && exit 0"
+    },
+    "dependencies": {
+        "@accelscript/runtime": "*",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-react": "^4.0.0",
+        "vite": "^4.0.0",
+        "typescript": "^5.0.0",
+        "@types/react": "^18.2.0",
+        "@types/react-dom": "^18.2.0"
+    }
+}

@@ -1,3 +1,6 @@
-/node_modules
-/dist
-TODO.md
+node_modules
+dist
+*.gen.tsx
+*.gen.ts
+.DS_Store
+coverage

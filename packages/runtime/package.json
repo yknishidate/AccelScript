@@ -1,0 +1,13 @@
+{
+    "name": "@accelscript/runtime",
+    "version": "0.0.1",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "test": "echo \"No tests specified\" && exit 0"
+    },
+    "devDependencies": {
+        "@webgpu/types": "^0.1.66",
+        "typescript": "^5.0.0"
+    }
+}

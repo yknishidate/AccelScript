@@ -1,0 +1,21 @@
+{
+    "name": "@accelscript/compiler",
+    "version": "0.0.1",
+    "main": "dist/index.js",
+    "bin": {
+        "accelscript": "./dist/index.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "test": "vitest run src"
+    },
+    "dependencies": {
+        "commander": "^11.0.0",
+        "ts-morph": "^21.0.0",
+        "typescript": "^5.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "vitest": "^4.0.13"
+    }
+}
