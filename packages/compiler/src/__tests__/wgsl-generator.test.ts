@@ -264,4 +264,171 @@ describe('WGSL Generator', () => {
         const result = generateWGSL(func);
         expect(result).toContain('return vec2(v.x, v.y);');
     });
+
+    // Switch statement tests
+    it('should handle basic switch statement', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testSwitch(value: u32) {
+                let result = 0;
+                switch (value) {
+                    case 0: {
+                        result = 10;
+                    }
+                    case 1: {
+                        result = 20;
+                    }
+                    case 2: {
+                        result = 30;
+                    }
+                }
+                return result;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('switch (value) {');
+        expect(result).toContain('case 0: {');
+        expect(result).toContain('result = 10;');
+        expect(result).toContain('case 1: {');
+        expect(result).toContain('result = 20;');
+        expect(result).toContain('case 2: {');
+        expect(result).toContain('result = 30;');
+    });
+
+    it('should handle switch with default case', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testSwitchDefault(value: i32) {
+                let result = 0;
+                switch (value) {
+                    case 0: {
+                        result = 1;
+                    }
+                    case 1: {
+                        result = 2;
+                    }
+                    default: {
+                        result = 99;
+                    }
+                }
+                return result;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('switch (value) {');
+        expect(result).toContain('case 0: {');
+        expect(result).toContain('case 1: {');
+        expect(result).toContain('default: {');
+        expect(result).toContain('result = 99;');
+    });
+
+    it('should handle switch with break statements', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testSwitchBreak(value: u32) {
+                let result = 0;
+                switch (value) {
+                    case 0: {
+                        result = 1;
+                        break;
+                    }
+                    case 1: {
+                        result = 2;
+                        break;
+                    }
+                }
+                return result;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('switch (value) {');
+        expect(result).toContain('case 0: {');
+        expect(result).toContain('result = 1;');
+        expect(result).toContain('break;');
+        expect(result).toContain('case 1: {');
+    });
+
+    it('should handle nested switch statements', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testNestedSwitch(a: u32, b: u32) {
+                let result = 0;
+                switch (a) {
+                    case 0: {
+                        switch (b) {
+                            case 0: {
+                                result = 1;
+                            }
+                            case 1: {
+                                result = 2;
+                            }
+                        }
+                    }
+                    case 1: {
+                        result = 3;
+                    }
+                }
+                return result;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('switch (a) {');
+        expect(result).toContain('switch (b) {');
+        expect(result).toContain('case 0: {');
+        expect(result).toContain('result = 1;');
+    });
+
+    it('should handle switch with return statements', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testSwitchReturn(value: u32) {
+                switch (value) {
+                    case 0: {
+                        return 10;
+                    }
+                    case 1: {
+                        return 20;
+                    }
+                    default: {
+                        return 0;
+                    }
+                }
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('switch (value) {');
+        expect(result).toContain('case 0: {');
+        expect(result).toContain('return 10;');
+        expect(result).toContain('case 1: {');
+        expect(result).toContain('return 20;');
+        expect(result).toContain('default: {');
+        expect(result).toContain('return 0;');
+    });
+
+    it('should handle switch with variable declarations', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function testSwitchVars(value: u32) {
+                let result = 0;
+                switch (value) {
+                    case 0: {
+                        const temp = 5;
+                        result = temp * 2;
+                    }
+                    case 1: {
+                        let temp2 = 10;
+                        result = temp2 + 5;
+                    }
+                }
+                return result;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('switch (value) {');
+        expect(result).toContain('case 0: {');
+        expect(result).toContain('let temp = 5;');
+        expect(result).toContain('result = temp * 2;');
+        expect(result).toContain('case 1: {');
+        expect(result).toContain('var temp2 = 10;');
+    });
 });

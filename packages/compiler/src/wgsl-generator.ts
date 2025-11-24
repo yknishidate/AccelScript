@@ -312,6 +312,29 @@ function transpileNode(node: Node): string {
         return `    for (${initStr}; ${condStr}; ${incStr}) {\n${body}\n    }`;
     }
 
+    // Switch statements
+    if (Node.isSwitchStatement(node)) {
+        const expr = transpileNode(node.getExpression());
+        const caseBlock = node.getCaseBlock();
+        const clauses = caseBlock.getClauses();
+
+        let casesStr = '';
+        for (const clause of clauses) {
+            if (Node.isCaseClause(clause)) {
+                const caseExpr = transpileNode(clause.getExpression());
+                const statements = clause.getStatements();
+                const body = statements.map(s => transpileNode(s)).join('\n');
+                casesStr += `        case ${caseExpr}: {\n${body}\n        }\n`;
+            } else if (Node.isDefaultClause(clause)) {
+                const statements = clause.getStatements();
+                const body = statements.map(s => transpileNode(s)).join('\n');
+                casesStr += `        default: {\n${body}\n        }\n`;
+            }
+        }
+
+        return `    switch (${expr}) {\n${casesStr}    }`;
+    }
+
     // Prefix unary expressions (e.g., -x, !flag)
     if (Node.isPrefixUnaryExpression(node)) {
         const op = node.getOperatorToken();
@@ -327,6 +350,16 @@ function transpileNode(node: Node): string {
     // Return statements
     if (Node.isReturnStatement(node)) {
         return `    return ${node.getExpression() ? transpileNode(node.getExpression()!) : ""};`;
+    }
+
+    // Break statements
+    if (Node.isBreakStatement(node)) {
+        return `        break;`;
+    }
+
+    // Continue statements
+    if (Node.isContinueStatement(node)) {
+        return `        continue;`;
     }
 
     // Function calls (e.g., sqrt(x), vec4(1.0, 0.0, 0.0, 1.0))
