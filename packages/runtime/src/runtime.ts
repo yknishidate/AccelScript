@@ -597,14 +597,27 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
     }
 
     // Display a 2D SharedArray as an image on the canvas
-    // array shape should be [height, width, channels] where channels is 3 (RGB) or 4 (RGBA)
+    // Supports:
+    // 1. 3D array: [height, width, channels] (channels = 3 or 4)
+    // 2. 2D array of vectors: [height, width] (vec3 or vec4)
     async showImage(array: SharedArray) {
         if (!this.context) throw new Error("Canvas not setup");
-        if (array.ndim !== 3) throw new Error("Image must be 3D array [height, width, channels]");
 
-        const [height, width, channels] = array.shape;
+        let width, height, channels;
+
+        if (array.ndim === 3) {
+            // [height, width, channels]
+            [height, width, channels] = array.shape;
+        } else if (array.ndim === 2 && array.type.components > 1) {
+            // [height, width] of vectors (vec3, vec4)
+            [height, width] = array.shape;
+            channels = array.type.components;
+        } else {
+            throw new Error("Image must be 3D array [height, width, channels] or 2D array of vectors (vec3/vec4)");
+        }
+
         if (channels !== 3 && channels !== 4) {
-            throw new Error("Image must have 3 (RGB) or 4 (RGBA) channels");
+            throw new Error(`Image must have 3 (RGB) or 4 (RGBA) channels, got ${channels}`);
         }
 
         await this.init();

@@ -1,18 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { runtime } from "@accelscript/runtime";
+import { runtime, SharedArray, f32 } from "@accelscript/runtime";
 
-// Mock types for compilation
-declare global {
-    var global_invocation_id: { x: number, y: number, z: number };
-    var vertex_index: number;
-    function vec4(x: number, y: number, z: number, w: number): Float32Array;
-}
+// Mock types removed as they are now in runtime
 
 // --- Test Kernels ---
 
 /** @kernel */
-function testAdd(a: Float32Array, b: Float32Array, out: Float32Array) {
+function testAdd(a: SharedArray<f32>, b: SharedArray<f32>, out: SharedArray<f32>) {
     let i = global_invocation_id.x;
+    // @ts-ignore
     out[i] = a[i] + b[i];
 }
 
@@ -43,19 +39,22 @@ export default function Tests() {
             // Test 1: Compute (Vector Add)
             try {
                 const size = 64;
-                const a = new Float32Array(size).fill(1);
-                const b = new Float32Array(size).fill(2);
-                const out = new Float32Array(size);
+                const a = new SharedArray(f32, size);
+                const b = new SharedArray(f32, size);
+                const out = new SharedArray(f32, size);
+
+                a.data.fill(1);
+                b.data.fill(2);
 
                 const tAdd = testAdd as any; // Transformed
                 // Note: The compiler transforms the function call to runtime.dispatch
                 // But here we are calling the transformed function which returns a Promise
                 await tAdd(a, b, out);
 
-                if (out[0] === 3 && out[63] === 3) {
+                if (out.data[0] === 3 && out.data[63] === 3) {
                     newResults.push({ name: "Compute: Vector Add", passed: true, message: "Output correct" });
                 } else {
-                    newResults.push({ name: "Compute: Vector Add", passed: false, message: `Expected 3, got ${out[0]}` });
+                    newResults.push({ name: "Compute: Vector Add", passed: false, message: `Expected 3, got ${out.data[0]}` });
                 }
             } catch (e: any) {
                 newResults.push({ name: "Compute: Vector Add", passed: false, message: e.message });

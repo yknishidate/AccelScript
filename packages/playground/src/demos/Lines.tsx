@@ -1,9 +1,9 @@
 import React, { useEffect } from 'react';
-import { runtime, SharedArray } from "@accelscript/runtime";
+import { runtime, SharedArray, vec2f } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
 
 
-export default function Circles() {
+export default function Lines() {
     const { canvasRef, isReady } = useCanvas();
 
     useEffect(() => {
@@ -13,8 +13,8 @@ export default function Circles() {
 
         const init = async () => {
             const numLines = 50;
-            const begins = new SharedArray(numLines * 2);
-            const ends = new SharedArray(numLines * 2);
+            const begins = new SharedArray(vec2f, numLines);
+            const ends = new SharedArray(vec2f, numLines);
             const widths = new Float32Array(numLines);
             const colors = new Float32Array(numLines * 4);
 
@@ -30,9 +30,27 @@ export default function Circles() {
                 colors[i * 4 + 3] = 1.0;
             }
 
+            const startTime = performance.now();
+
             // Animation loop
             const animate = async () => {
                 if (!animating) return;
+
+                const time = (performance.now() - startTime) / 1000;
+
+                for (let i = 0; i < numLines; i++) {
+                    // Lissajous-like movement
+                    begins.data[i * 2 + 0] = Math.sin(time * 0.5 + i * 0.1) * 0.8;
+                    begins.data[i * 2 + 1] = Math.cos(time * 0.3 + i * 0.1) * 0.8;
+
+                    ends.data[i * 2 + 0] = Math.sin(time * 0.7 + i * 0.1 + Math.PI) * 0.8;
+                    ends.data[i * 2 + 1] = Math.cos(time * 0.6 + i * 0.1 + Math.PI) * 0.8;
+
+                    // Dynamic colors
+                    colors[i * 4 + 0] = 0.5 + 0.5 * Math.sin(time + i * 0.2);
+                    colors[i * 4 + 1] = 0.5 + 0.5 * Math.cos(time * 1.2 + i * 0.3);
+                    colors[i * 4 + 2] = 0.5 + 0.5 * Math.sin(time * 0.8 + i * 0.4);
+                }
 
                 // @ts-ignore
                 await runtime.lines(begins.data, ends.data, widths, colors);

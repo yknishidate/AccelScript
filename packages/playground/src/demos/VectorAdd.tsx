@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-
-
+import { runtime, SharedArray, f32 } from "@accelscript/runtime";
 
 /** @kernel @workgroup_size(64) */
-async function add(a: Float32Array, b: Float32Array, out: Float32Array) {
+async function add(a: SharedArray<f32>, b: SharedArray<f32>, out: SharedArray<f32>) {
     const i = global_id.x;
+    // @ts-ignore
     out[i] = a[i] + b[i];
 }
 
@@ -15,14 +15,17 @@ export default function App() {
         setResult("Running...");
         try {
             const size = 1024;
-            const a = new Float32Array(size).fill(1);
-            const b = new Float32Array(size).fill(2);
-            const out = new Float32Array(size);
+            const a = new SharedArray(f32, size);
+            const b = new SharedArray(f32, size);
+            const out = new SharedArray(f32, size);
+
+            a.data.fill(1);
+            b.data.fill(2);
 
             // @ts-ignore
             await add<[16, 1, 1]>(a, b, out);
 
-            setResult(`Done. out = [${out.join(', ')}]`);
+            setResult(`Done. out = [${out.data.slice(0, 5).join(', ')}, ...]`);
         } catch (e: any) {
             setResult(`Error: ${e.message}`);
         }

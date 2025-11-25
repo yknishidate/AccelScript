@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { runtime, SharedArray } from "@accelscript/runtime";
+import { runtime, SharedArray, vec4f, f32 } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
 
 interface Params {
@@ -9,7 +9,7 @@ interface Params {
 }
 
 /** @kernel @workgroup_size(8, 8) */
-async function generateImage(image: Float32Array, params: Params) {
+async function generateImage(image: SharedArray<vec4f>, params: Params) {
     const x = global_invocation_id.x;
     const y = global_invocation_id.y;
 
@@ -17,7 +17,7 @@ async function generateImage(image: Float32Array, params: Params) {
         return;
     }
 
-    const idx = (y * params.width + x) * 4;
+    const idx = y * params.width + x;
 
     // Generate colorful pattern
     const fx = f32(x) / f32(params.width);
@@ -25,10 +25,12 @@ async function generateImage(image: Float32Array, params: Params) {
 
     const uv = vec2(fx, fy);
 
-    image[idx + 0] = 0.5 + 0.5 * sin(uv.x * 10.0 + params.time);
-    image[idx + 1] = 0.5 + 0.5 * sin(uv.y * 10.0 + params.time * 1.3);
-    image[idx + 2] = 0.5 + 0.5 * sin((uv.x + uv.y) * 5.0 + params.time * 0.7);
-    image[idx + 3] = 1.0;
+    const r = 0.5 + 0.5 * sin(uv.x * 10.0 + params.time);
+    const g = 0.5 + 0.5 * sin(uv.y * 10.0 + params.time * 1.3);
+    const b = 0.5 + 0.5 * sin((uv.x + uv.y) * 5.0 + params.time * 0.7);
+
+    // @ts-ignore
+    image[idx] = vec4(r, g, b, 1.0);
 }
 
 export default function ImageDemo() {
@@ -48,7 +50,9 @@ export default function ImageDemo() {
                 width: u32(width),
                 height: u32(height),
             };
-            const image = new SharedArray([height, width, 4]); // RGBA
+            // SharedArray<vec4f> with shape [height, width]
+            // The kernel uses 1D index: y * width + x.
+            const image = new SharedArray(vec4f, [height, width]);
 
             const startTime = performance.now();
 

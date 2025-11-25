@@ -1,19 +1,18 @@
 import React, { useEffect } from 'react';
-import { runtime, SharedArray } from "@accelscript/runtime";
+import { runtime, SharedArray, vec2f } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
 
-
-
 /** @kernel */
-async function updatePositions(centers: Float32Array, velocities: Float32Array) {
+async function updatePositions(centers: SharedArray<vec2f>, velocities: SharedArray<vec2f>) {
     const i = global_invocation_id.x;
-    const idx = i * 2;
 
     // Update positions
-    let pos = vec2(centers[idx + 0], centers[idx + 1]);
-    let vel = vec2(velocities[idx + 0], velocities[idx + 1]);
+    // @ts-ignore
+    let pos = centers[i];
+    // @ts-ignore
+    let vel = velocities[i];
 
-    pos = (pos + vel * 0.01) as any;
+    pos = pos + vel * 0.01;
 
     // Bounce off edges
     if (pos.x > 1.0 || pos.x < -1.0) {
@@ -23,10 +22,10 @@ async function updatePositions(centers: Float32Array, velocities: Float32Array) 
         vel.y = -vel.y;
     }
 
-    centers[idx + 0] = pos.x;
-    centers[idx + 1] = pos.y;
-    velocities[idx + 0] = vel.x;
-    velocities[idx + 1] = vel.y;
+    // @ts-ignore
+    centers[i] = pos;
+    // @ts-ignore
+    velocities[i] = vel;
 }
 
 export default function Circles() {
@@ -40,8 +39,8 @@ export default function Circles() {
         const init = async () => {
             // Initialize SharedArrays directly
             const numCircles = 50;
-            const centers = new SharedArray(numCircles * 2);
-            const velocities = new SharedArray(numCircles * 2);
+            const centers = new SharedArray(vec2f, numCircles);
+            const velocities = new SharedArray(vec2f, numCircles);
             const radii = new Float32Array(numCircles);
             const colors = new Float32Array(numCircles * 4);
 

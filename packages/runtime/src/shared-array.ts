@@ -1,22 +1,22 @@
 import { TypedArray, TypedArrayConstructor, TypeSpec, f32 } from './types';
 
-export class SharedArray<T extends TypedArray = Float32Array> {
-    private hostData: T;
+export class SharedArray<T = any> {
+    private hostData: TypedArray;
     private deviceBuffer: GPUBuffer | null = null;
     private device: GPUDevice | null = null;
 
     public readonly shape: number[];
     public readonly ndim: number;
-    public readonly type: TypeSpec<T>;
+    public readonly type: TypeSpec<any>;
 
     constructor(
-        typeOrData: TypeSpec<T> | number | number[] | T,
-        shapeOrSizeOrData?: number | number[] | T
+        typeOrData: TypeSpec<any> | number | number[] | TypedArray,
+        shapeOrSizeOrData?: number | number[] | TypedArray
     ) {
         // Handle overload: constructor(type: TypeSpec, data: number[])
         // or constructor(type: TypeSpec, size: number)
         if (typeof typeOrData === 'function' && 'kind' in typeOrData) {
-            this.type = typeOrData as TypeSpec<T>;
+            this.type = typeOrData as TypeSpec<any>;
             const dataOrSize = shapeOrSizeOrData!;
 
             if (Array.isArray(dataOrSize)) {
@@ -25,16 +25,16 @@ export class SharedArray<T extends TypedArray = Float32Array> {
                 this.ndim = dataOrSize.length;
                 const elementCount = dataOrSize.reduce((a, b) => a * b, 1);
                 const totalFloats = elementCount * this.type.components;
-                this.hostData = new this.type.TypedArray(totalFloats) as T;
+                this.hostData = new this.type.TypedArray(totalFloats);
             } else if (typeof dataOrSize === 'number') {
                 // new SharedArray(vec2f, 10) -> 10 vectors
                 this.shape = [dataOrSize];
                 this.ndim = 1;
                 const totalFloats = dataOrSize * this.type.components;
-                this.hostData = new this.type.TypedArray(totalFloats) as T;
+                this.hostData = new this.type.TypedArray(totalFloats);
             } else if (ArrayBuffer.isView(dataOrSize)) {
                 // new SharedArray(vec2f, new Float32Array([...])) -> Data
-                this.hostData = dataOrSize as T;
+                this.hostData = dataOrSize;
                 this.shape = [this.hostData.length / this.type.components];
                 this.ndim = 1;
             } else {
@@ -42,20 +42,20 @@ export class SharedArray<T extends TypedArray = Float32Array> {
             }
         } else {
             // Old behavior: default to f32
-            this.type = f32 as any as TypeSpec<T>;
-            const shapeOrSizeOrData = typeOrData as number | number[] | T;
+            this.type = f32 as any as TypeSpec<any>;
+            const shapeOrSizeOrData = typeOrData as number | number[] | TypedArray;
 
             if (Array.isArray(shapeOrSizeOrData)) {
                 // Multi-dimensional array: new SharedArray([10, 20, 3])
                 this.shape = shapeOrSizeOrData;
                 this.ndim = shapeOrSizeOrData.length;
                 const totalSize = shapeOrSizeOrData.reduce((a, b) => a * b, 1);
-                this.hostData = new Float32Array(totalSize) as unknown as T;
+                this.hostData = new Float32Array(totalSize);
             } else if (typeof shapeOrSizeOrData === 'number') {
                 // 1D array: new SharedArray(100)
                 this.shape = [shapeOrSizeOrData];
                 this.ndim = 1;
-                this.hostData = new Float32Array(shapeOrSizeOrData) as unknown as T;
+                this.hostData = new Float32Array(shapeOrSizeOrData);
             } else {
                 // From existing TypedArray
                 this.hostData = shapeOrSizeOrData;
@@ -68,7 +68,7 @@ export class SharedArray<T extends TypedArray = Float32Array> {
     /**
      * Access the underlying TypedArray host data
      */
-    get data(): T {
+    get data(): TypedArray {
         return this.hostData;
     }
 
