@@ -1,4 +1,4 @@
-import { FunctionDeclaration, SyntaxKind, Node, BinaryExpression, Identifier, NumericLiteral, ReturnStatement, Block, VariableStatement, CallExpression, ElementAccessExpression, VariableDeclarationKind, InterfaceDeclaration, TypeAliasDeclaration, SourceFile } from "ts-morph";
+import { FunctionDeclaration, SyntaxKind, Node, BinaryExpression, Identifier, NumericLiteral, ReturnStatement, Block, VariableStatement, CallExpression, ElementAccessExpression, VariableDeclarationKind, InterfaceDeclaration, TypeAliasDeclaration, SourceFile, IfStatement, ForStatement, WhileStatement, DoStatement, SwitchStatement } from "ts-morph";
 
 // Constants
 const DEFAULT_WORKGROUP_SIZE = "64";
@@ -9,9 +9,26 @@ export function generateWGSL(func: FunctionDeclaration): string {
         throw new Error("Function must have a name");
     }
 
-    const sourceFile = func.getSourceFile();
+    const structDefs = generateStructDefinitions(func);
+    const bindings = generateBindings(func);
 
-    // Collect struct types used in parameters
+    let body = "";
+    const bodyBlock = func.getBody();
+    if (bodyBlock && Node.isBlock(bodyBlock)) {
+        body = transpileBlock(bodyBlock);
+    }
+
+    const { prefix, signature, returnType } = getShaderSignature(func);
+
+    return `${structDefs}${bindings}
+${prefix}
+fn ${name}(${signature}) ${returnType} {
+${body}
+}`;
+}
+
+function generateStructDefinitions(func: FunctionDeclaration): string {
+    const sourceFile = func.getSourceFile();
     const structTypes = new Set<string>();
     func.getParameters().forEach(p => {
         if (p.getName() === "workgroup_count") return;
@@ -22,7 +39,6 @@ export function generateWGSL(func: FunctionDeclaration): string {
         }
     });
 
-    // Generate WGSL struct definitions
     let structDefs = "";
     for (const structName of structTypes) {
         const structDef = generateStructDefinition(sourceFile, structName);
@@ -32,36 +48,31 @@ export function generateWGSL(func: FunctionDeclaration): string {
             console.warn(`Warning: Could not generate struct definition for '${structName}'`);
         }
     }
+    return structDefs;
+}
 
-    // Generate global bindings
+function generateBindings(func: FunctionDeclaration): string {
     let bindings = "";
     func.getParameters().forEach((p, index) => {
         const n = p.getName();
-        if (n === "workgroup_count") return; // Skip workgroup_count parameter
+        if (n === "workgroup_count") return;
 
-        // Get the type annotation text directly to preserve u32/i32/f32
         const typeNode = p.getTypeNode();
         const typeText = typeNode ? typeNode.getText() : p.getType().getText();
         const type = mapType(typeText);
 
-        // Determine binding type based on whether it's a scalar/struct (uniform) or array (storage)
         const bindingType = isScalarOrStructType(type) ? "uniform" : "storage, read_write";
-
-        // Simple binding allocation
         bindings += `@group(0) @binding(${index}) var<${bindingType}> ${n} : ${type};\n`;
     });
+    return bindings;
+}
 
-    let body = "";
-    const bodyBlock = func.getBody();
-    if (bodyBlock && Node.isBlock(bodyBlock)) {
-        body = transpileBlock(bodyBlock);
-    }
-
-    // Determine shader stage
+function getShaderSignature(func: FunctionDeclaration): { prefix: string, signature: string, returnType: string } {
     const jsDocs = func.getJsDocs();
     const isKernel = jsDocs.some(doc => doc.getTags().some(tag => tag.getTagName() === "kernel"));
     const isVertex = jsDocs.some(doc => doc.getTags().some(tag => tag.getTagName() === "vertex"));
     const isFragment = jsDocs.some(doc => doc.getTags().some(tag => tag.getTagName() === "fragment"));
+    const name = func.getName();
 
     if (!isKernel && !isVertex && !isFragment) {
         throw new Error(`Function '${name}' must have @kernel, @vertex, or @fragment annotation`);
@@ -79,7 +90,6 @@ export function generateWGSL(func: FunctionDeclaration): string {
     if (workgroupSizeTag) {
         const comment = workgroupSizeTag.getComment();
         if (comment) {
-            // Remove parentheses if present to normalize
             const cleanComment = comment.toString().trim().replace(/^\((.*)\)$/, '$1');
             workgroupSize = cleanComment;
         }
@@ -98,11 +108,7 @@ export function generateWGSL(func: FunctionDeclaration): string {
         returnType = "-> @location(0) vec4<f32>";
     }
 
-    return `${structDefs}${bindings}
-${prefix}
-fn ${name}(${signature}) ${returnType} {
-${body}
-}`;
+    return { prefix, signature, returnType };
 }
 
 function mapType(tsType: string): string {
@@ -307,74 +313,27 @@ function transpileNode(node: Node): string {
 
     // If statements with optional else clause
     if (Node.isIfStatement(node)) {
-        const cond = transpileNode(node.getExpression());
-        const thenStmt = transpileNode(node.getThenStatement());
-        const elseStmt = node.getElseStatement() ? ` else { ${transpileNode(node.getElseStatement()!)} }` : "";
-        // Handle block vs single statement
-        const thenBlock = Node.isBlock(node.getThenStatement()) ? thenStmt : `{ ${thenStmt} }`;
-        return `    if (${cond}) ${thenBlock}${elseStmt}`;
+        return transpileIfStatement(node);
     }
 
     // For loops
     if (Node.isForStatement(node)) {
-        const initializer = node.getInitializer();
-        const condition = node.getCondition();
-        const incrementor = node.getIncrementor();
-        const statement = node.getStatement();
-
-        let initStr = "";
-        if (initializer) {
-            // Strip indentation and trailing semicolon from initializer
-            initStr = transpileNode(initializer).trim().replace(/;$/, "");
-        }
-
-        const condStr = condition ? transpileNode(condition) : "true";
-        const incStr = incrementor ? transpileNode(incrementor) : "";
-
-        const body = Node.isBlock(statement) ? transpileBlock(statement) : transpileNode(statement);
-
-        return `    for (${initStr}; ${condStr}; ${incStr}) {\n${body}\n    }`;
+        return transpileForStatement(node);
     }
 
     // While loops
     if (Node.isWhileStatement(node)) {
-        const condition = transpileNode(node.getExpression());
-        const statement = node.getStatement();
-        const body = Node.isBlock(statement) ? transpileBlock(statement) : transpileNode(statement);
-        return `    while (${condition}) {\n${body}\n    }`;
+        return transpileWhileStatement(node);
     }
 
     // Do-while loops (transpiled to WGSL loop with conditional break)
     if (Node.isDoStatement(node)) {
-        const condition = transpileNode(node.getExpression());
-        const statement = node.getStatement();
-        const body = Node.isBlock(statement) ? transpileBlock(statement) : transpileNode(statement);
-
-        // WGSL doesn't have do-while, use loop with break
-        return `    loop {\n${body}\n        if (!(${condition})) {\n            break;\n        }\n    }`;
+        return transpileDoStatement(node);
     }
 
     // Switch statements
     if (Node.isSwitchStatement(node)) {
-        const expr = transpileNode(node.getExpression());
-        const caseBlock = node.getCaseBlock();
-        const clauses = caseBlock.getClauses();
-
-        let casesStr = '';
-        for (const clause of clauses) {
-            if (Node.isCaseClause(clause)) {
-                const caseExpr = transpileNode(clause.getExpression());
-                const statements = clause.getStatements();
-                const body = statements.map(s => transpileNode(s)).join('\n');
-                casesStr += `        case ${caseExpr}: {\n${body}\n        }\n`;
-            } else if (Node.isDefaultClause(clause)) {
-                const statements = clause.getStatements();
-                const body = statements.map(s => transpileNode(s)).join('\n');
-                casesStr += `        default: {\n${body}\n        }\n`;
-            }
-        }
-
-        return `    switch (${expr}) {\n${casesStr}    }`;
+        return transpileSwitchStatement(node);
     }
 
     // Prefix unary expressions (e.g., -x, !flag)
@@ -465,4 +424,67 @@ function transpileNode(node: Node): string {
     // Unsupported node type - emit a comment for debugging
     console.warn(`Warning: Unsupported node type '${node.getKindName()}' at line ${node.getStartLineNumber()}`);
     return `/* Unsupported node: ${node.getKindName()} */`;
+}
+
+function transpileIfStatement(node: IfStatement): string {
+    const cond = transpileNode(node.getExpression());
+    const thenStmt = transpileNode(node.getThenStatement());
+    const elseStmt = node.getElseStatement() ? ` else { ${transpileNode(node.getElseStatement()!)} }` : "";
+    const thenBlock = Node.isBlock(node.getThenStatement()) ? thenStmt : `{ ${thenStmt} }`;
+    return `    if (${cond}) ${thenBlock}${elseStmt}`;
+}
+
+function transpileForStatement(node: ForStatement): string {
+    const initializer = node.getInitializer();
+    const condition = node.getCondition();
+    const incrementor = node.getIncrementor();
+    const statement = node.getStatement();
+
+    let initStr = "";
+    if (initializer) {
+        initStr = transpileNode(initializer).trim().replace(/;$/, "");
+    }
+
+    const condStr = condition ? transpileNode(condition) : "true";
+    const incStr = incrementor ? transpileNode(incrementor) : "";
+
+    const body = Node.isBlock(statement) ? transpileBlock(statement) : transpileNode(statement);
+
+    return `    for (${initStr}; ${condStr}; ${incStr}) {\n${body}\n    }`;
+}
+
+function transpileWhileStatement(node: WhileStatement): string {
+    const condition = transpileNode(node.getExpression());
+    const statement = node.getStatement();
+    const body = Node.isBlock(statement) ? transpileBlock(statement) : transpileNode(statement);
+    return `    while (${condition}) {\n${body}\n    }`;
+}
+
+function transpileDoStatement(node: DoStatement): string {
+    const condition = transpileNode(node.getExpression());
+    const statement = node.getStatement();
+    const body = Node.isBlock(statement) ? transpileBlock(statement) : transpileNode(statement);
+    return `    loop {\n${body}\n        if (!(${condition})) {\n            break;\n        }\n    }`;
+}
+
+function transpileSwitchStatement(node: SwitchStatement): string {
+    const expr = transpileNode(node.getExpression());
+    const caseBlock = node.getCaseBlock();
+    const clauses = caseBlock.getClauses();
+
+    let casesStr = '';
+    for (const clause of clauses) {
+        if (Node.isCaseClause(clause)) {
+            const caseExpr = transpileNode(clause.getExpression());
+            const statements = clause.getStatements();
+            const body = statements.map(s => transpileNode(s)).join('\n');
+            casesStr += `        case ${caseExpr}: {\n${body}\n        }\n`;
+        } else if (Node.isDefaultClause(clause)) {
+            const statements = clause.getStatements();
+            const body = statements.map(s => transpileNode(s)).join('\n');
+            casesStr += `        default: {\n${body}\n        }\n`;
+        }
+    }
+
+    return `    switch (${expr}) {\n${casesStr}    }`;
 }
