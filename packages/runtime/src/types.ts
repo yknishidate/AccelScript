@@ -12,6 +12,13 @@ export type TypedArrayConstructor<T extends TypedArray> =
     T extends Uint8Array ? Uint8ArrayConstructor :
     never;
 
+export interface TypeSpec<T extends TypedArray> {
+    kind: string;
+    components: number;
+    elementSize: number; // bytes per component (e.g. 4 for f32)
+    TypedArray: TypedArrayConstructor<T>;
+}
+
 declare global {
     // ========================================================================
     // Primitive Types
@@ -182,11 +189,71 @@ export interface ScalarWrapper {
     value: number;
 }
 
-export const u32 = (v: number): any => ({ type: 'u32', value: v });
-export const i32 = (v: number): any => ({ type: 'i32', value: v });
-export const f32 = (v: number): any => ({ type: 'f32', value: v });
+// Implementations
+const createType = <T extends TypedArray>(
+    kind: string,
+    components: number,
+    elementSize: number,
+    TypedArray: TypedArrayConstructor<T>,
+    fn: (...args: number[]) => any
+) => {
+    const wrapped = fn;
+    (wrapped as any).kind = kind;
+    (wrapped as any).components = components;
+    (wrapped as any).elementSize = elementSize;
+    (wrapped as any).TypedArray = TypedArray;
+    return wrapped as typeof fn & TypeSpec<T>;
+};
 
-// Expose to global scope for user convenience
-(globalThis as any).u32 = u32;
-(globalThis as any).i32 = i32;
-(globalThis as any).f32 = f32;
+// Primitives
+export const u32 = createType('u32', 1, 4, Uint32Array, (v) => ({ type: 'u32', value: v }));
+export const i32 = createType('i32', 1, 4, Int32Array, (v) => ({ type: 'i32', value: v }));
+export const f32 = createType('f32', 1, 4, Float32Array, (v) => ({ type: 'f32', value: v }));
+
+// Float Vectors
+export const vec2f = createType('vec2f', 2, 4, Float32Array, (x, y) => new Float32Array([x, y]));
+export const vec3f = createType('vec3f', 3, 4, Float32Array, (x, y, z) => new Float32Array([x, y, z]));
+export const vec4f = createType('vec4f', 4, 4, Float32Array, (x, y, z, w) => new Float32Array([x, y, z, w]));
+
+// Integer Vectors
+export const vec2i = createType('vec2i', 2, 4, Int32Array, (x, y) => new Int32Array([x, y]));
+export const vec3i = createType('vec3i', 3, 4, Int32Array, (x, y, z) => new Int32Array([x, y, z]));
+export const vec4i = createType('vec4i', 4, 4, Int32Array, (x, y, z, w) => new Int32Array([x, y, z, w]));
+
+// Unsigned Integer Vectors
+export const vec2u = createType('vec2u', 2, 4, Uint32Array, (x, y) => new Uint32Array([x, y]));
+export const vec3u = createType('vec3u', 3, 4, Uint32Array, (x, y, z) => new Uint32Array([x, y, z]));
+export const vec4u = createType('vec4u', 4, 4, Uint32Array, (x, y, z, w) => new Uint32Array([x, y, z, w]));
+
+// Matrices
+export const mat2x2f = createType('mat2x2f', 4, 4, Float32Array, (...args) => new Float32Array(args));
+export const mat3x3f = createType('mat3x3f', 12, 4, Float32Array, (...args) => new Float32Array(args)); // 3x3 is often padded to 12 floats (48 bytes) or 16 floats (64 bytes) depending on alignment. Using 12 for now.
+export const mat4x4f = createType('mat4x4f', 16, 4, Float32Array, (...args) => new Float32Array(args));
+
+// Expose to global scope
+const g = globalThis as any;
+g.u32 = u32;
+g.i32 = i32;
+g.f32 = f32;
+
+g.vec2f = vec2f;
+g.vec3f = vec3f;
+g.vec4f = vec4f;
+g.vec2 = vec2f;
+g.vec3 = vec3f;
+g.vec4 = vec4f;
+
+g.vec2i = vec2i;
+g.vec3i = vec3i;
+g.vec4i = vec4i;
+
+g.vec2u = vec2u;
+g.vec3u = vec3u;
+g.vec4u = vec4u;
+
+g.mat2x2f = mat2x2f;
+g.mat3x3f = mat3x3f;
+g.mat4x4f = mat4x4f;
+g.mat2x2 = mat2x2f;
+g.mat3x3 = mat3x3f;
+g.mat4x4 = mat4x4f;

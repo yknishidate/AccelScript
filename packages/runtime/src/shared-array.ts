@@ -1,4 +1,4 @@
-import { TypedArray, TypedArrayConstructor } from './types';
+import { TypedArray, TypedArrayConstructor, TypeSpec, f32 } from './types';
 
 export class SharedArray<T extends TypedArray = Float32Array> {
     private hostData: T;
@@ -7,26 +7,61 @@ export class SharedArray<T extends TypedArray = Float32Array> {
 
     public readonly shape: number[];
     public readonly ndim: number;
+    public readonly type: TypeSpec<T>;
 
-    constructor(shapeOrSizeOrData: number | number[] | T, arrayType?: TypedArrayConstructor<T>) {
-        if (Array.isArray(shapeOrSizeOrData)) {
-            // Multi-dimensional array: new SharedArray([10, 20, 3])
-            this.shape = shapeOrSizeOrData;
-            this.ndim = shapeOrSizeOrData.length;
-            const totalSize = shapeOrSizeOrData.reduce((a, b) => a * b, 1);
-            const ArrayConstructor = arrayType || Float32Array as TypedArrayConstructor<T>;
-            this.hostData = new ArrayConstructor(totalSize) as T;
-        } else if (typeof shapeOrSizeOrData === 'number') {
-            // 1D array: new SharedArray(100)
-            this.shape = [shapeOrSizeOrData];
-            this.ndim = 1;
-            const ArrayConstructor = arrayType || Float32Array as TypedArrayConstructor<T>;
-            this.hostData = new ArrayConstructor(shapeOrSizeOrData) as T;
+    constructor(
+        typeOrData: TypeSpec<T> | number | number[] | T,
+        shapeOrSizeOrData?: number | number[] | T
+    ) {
+        // Handle overload: constructor(type: TypeSpec, data: number[])
+        // or constructor(type: TypeSpec, size: number)
+        if (typeof typeOrData === 'function' && 'kind' in typeOrData) {
+            this.type = typeOrData as TypeSpec<T>;
+            const dataOrSize = shapeOrSizeOrData!;
+
+            if (Array.isArray(dataOrSize)) {
+                // new SharedArray(vec2f, [height, width]) -> Shape
+                this.shape = dataOrSize;
+                this.ndim = dataOrSize.length;
+                const elementCount = dataOrSize.reduce((a, b) => a * b, 1);
+                const totalFloats = elementCount * this.type.components;
+                this.hostData = new this.type.TypedArray(totalFloats) as T;
+            } else if (typeof dataOrSize === 'number') {
+                // new SharedArray(vec2f, 10) -> 10 vectors
+                this.shape = [dataOrSize];
+                this.ndim = 1;
+                const totalFloats = dataOrSize * this.type.components;
+                this.hostData = new this.type.TypedArray(totalFloats) as T;
+            } else if (ArrayBuffer.isView(dataOrSize)) {
+                // new SharedArray(vec2f, new Float32Array([...])) -> Data
+                this.hostData = dataOrSize as T;
+                this.shape = [this.hostData.length / this.type.components];
+                this.ndim = 1;
+            } else {
+                throw new Error("Invalid data for SharedArray");
+            }
         } else {
-            // From existing TypedArray
-            this.hostData = shapeOrSizeOrData;
-            this.shape = [shapeOrSizeOrData.length];
-            this.ndim = 1;
+            // Old behavior: default to f32
+            this.type = f32 as any as TypeSpec<T>;
+            const shapeOrSizeOrData = typeOrData as number | number[] | T;
+
+            if (Array.isArray(shapeOrSizeOrData)) {
+                // Multi-dimensional array: new SharedArray([10, 20, 3])
+                this.shape = shapeOrSizeOrData;
+                this.ndim = shapeOrSizeOrData.length;
+                const totalSize = shapeOrSizeOrData.reduce((a, b) => a * b, 1);
+                this.hostData = new Float32Array(totalSize) as unknown as T;
+            } else if (typeof shapeOrSizeOrData === 'number') {
+                // 1D array: new SharedArray(100)
+                this.shape = [shapeOrSizeOrData];
+                this.ndim = 1;
+                this.hostData = new Float32Array(shapeOrSizeOrData) as unknown as T;
+            } else {
+                // From existing TypedArray
+                this.hostData = shapeOrSizeOrData;
+                this.shape = [shapeOrSizeOrData.length];
+                this.ndim = 1;
+            }
         }
     }
 
@@ -45,10 +80,10 @@ export class SharedArray<T extends TypedArray = Float32Array> {
     }
 
     /**
-     * Total number of elements in the array
+     * Total number of elements (vectors if vector type, scalars if scalar type)
      */
     get size(): number {
-        return this.hostData.length;
+        return this.hostData.length / this.type.components;
     }
 
     /**
