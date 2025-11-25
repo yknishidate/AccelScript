@@ -84,4 +84,36 @@ describe('Host Transformer', () => {
         expect(result).toContain('return 1 + 1;');
         expect(result).not.toContain('runtime.dispatch');
     });
+
+    it('should include device functions in kernel WGSL', () => {
+        const code = `
+            /** @device */
+            function sq(x: number): number {
+                return x * x;
+            }
+
+            /** @kernel */
+            function compute() {
+                const y = sq(2.0);
+            }
+        `;
+        const result = transform(code);
+
+        // Check if device function is generated
+        expect(result).toContain('fn sq(x : f32) -> f32 {');
+        expect(result).toContain('return x * x;');
+
+        // Check if it's included in the kernel WGSL string
+        // The transform generates a variable like: let compute_wgsl = "..."
+        // We extract the string content to check the actual WGSL
+        const wgslVarMatch = result.match(/let compute_wgsl = (.*);/);
+        expect(wgslVarMatch).toBeTruthy();
+
+        const wgslStringLiteral = wgslVarMatch![1];
+        const unescapedWgsl = JSON.parse(wgslStringLiteral);
+
+        expect(unescapedWgsl).toContain('fn sq(x : f32) -> f32 {');
+        expect(unescapedWgsl).toContain('return x * x;');
+        expect(unescapedWgsl).toContain('@compute');
+    });
 });

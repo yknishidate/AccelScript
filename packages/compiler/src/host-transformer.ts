@@ -1,5 +1,5 @@
 import { SourceFile, FunctionDeclaration, SyntaxKind, CallExpression } from "ts-morph";
-import { generateWGSL } from "./wgsl-generator";
+import { generateWGSL, generateDeviceFunction } from "./wgsl-generator";
 
 /**
  * Transform host TypeScript code to use the runtime and embed WGSL shaders
@@ -12,8 +12,11 @@ export function transformHost(sourceFile: SourceFile) {
     // Transform kernel call sites to pass workgroup count as argument
     transformKernelCallSites(sourceFile);
 
+    // Collect all device functions
+    const deviceFunctionsWGSL = collectDeviceFunctions(sourceFile);
+
     // Transform kernel, vertex, and fragment functions
-    transformShaderFunctions(sourceFile);
+    transformShaderFunctions(sourceFile, deviceFunctionsWGSL);
 }
 
 /**
@@ -79,9 +82,34 @@ function transformKernelCall(call: CallExpression) {
 }
 
 /**
+ * Collect all functions marked with @device and generate their WGSL
+ */
+function collectDeviceFunctions(sourceFile: SourceFile): string {
+    const functions = sourceFile.getFunctions();
+    let wgsl = "";
+
+    for (const func of functions) {
+        const jsDocs = func.getJsDocs();
+        const isDevice = jsDocs.some(doc => doc.getTags().some(tag => tag.getTagName() === "device"));
+
+        if (isDevice) {
+            wgsl += generateDeviceFunction(func) + "\n\n";
+            // Remove the device function from the output JS/TS as it's only for WGSL
+            // Or keep it? If it's pure logic it might be useful on CPU too?
+            // For now, let's keep it but maybe we should comment it out or something?
+            // Actually, if it's used in kernel, it shouldn't be called from CPU directly usually.
+            // But for shared logic it might be useful.
+            // Let's leave it as is for now.
+        }
+    }
+
+    return wgsl;
+}
+
+/**
  * Transform shader functions (kernel, vertex, fragment) to embed WGSL and call runtime
  */
-function transformShaderFunctions(sourceFile: SourceFile) {
+function transformShaderFunctions(sourceFile: SourceFile, deviceFunctionsWGSL: string) {
     // Process functions in reverse order to avoid index shifting issues when inserting statements
     const functions = sourceFile.getFunctions().reverse();
 
@@ -98,9 +126,9 @@ function transformShaderFunctions(sourceFile: SourceFile) {
         const isFragment = jsDocs.some(doc => doc.getTags().some(tag => tag.getTagName() === "fragment"));
 
         if (isKernel) {
-            transformKernelFunction(func, sourceFile);
+            transformKernelFunction(func, sourceFile, deviceFunctionsWGSL);
         } else if (isVertex || isFragment) {
-            transformShaderFunction(func);
+            transformShaderFunction(func, deviceFunctionsWGSL);
         }
     }
 }
@@ -108,9 +136,9 @@ function transformShaderFunctions(sourceFile: SourceFile) {
 /**
  * Transform a kernel function to embed WGSL and dispatch via runtime
  */
-function transformKernelFunction(func: FunctionDeclaration, sourceFile: SourceFile) {
+function transformKernelFunction(func: FunctionDeclaration, sourceFile: SourceFile, deviceFunctionsWGSL: string) {
     const name = func.getName()!;
-    const wgsl = generateWGSL(func);
+    const wgsl = deviceFunctionsWGSL + generateWGSL(func);
 
     // Insert WGSL constant before the function
     const index = func.getChildIndex();
@@ -149,9 +177,9 @@ function transformKernelFunction(func: FunctionDeclaration, sourceFile: SourceFi
 /**
  * Transform a vertex or fragment shader function to return shader info
  */
-function transformShaderFunction(func: FunctionDeclaration) {
+function transformShaderFunction(func: FunctionDeclaration, deviceFunctionsWGSL: string) {
     const name = func.getName()!;
-    const wgsl = generateWGSL(func);
+    const wgsl = deviceFunctionsWGSL + generateWGSL(func);
 
     // Replace body to return shader code and entry point
     func.setBodyText(`return { code: ${JSON.stringify(wgsl)}, entryPoint: "${name}" } as any;`);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { Project } from 'ts-morph';
-import { generateWGSL } from '../wgsl-generator';
+import { generateWGSL, generateDeviceFunction } from '../wgsl-generator';
 
 describe('WGSL Generator', () => {
     const project = new Project({ useInMemoryFileSystem: true });
@@ -726,6 +726,19 @@ describe('WGSL Generator', () => {
         `);
         const result = generateWGSL(func);
         expect(result).toContain('@group(0) @binding(0) var<storage, read_write> data : array<f32>;');
+    });
+
+    it('should generate device function', () => {
+        const func = getFunction(`
+            /** @device */
+            function sq(x: number): number {
+                return x * x;
+            }
+        `);
+        const result = generateDeviceFunction(func);
+        expect(result).toContain('fn sq(x : f32) -> f32 {');
+        expect(result).toContain('return x * x;');
+        expect(result).toContain('}');
     });
 });
 

@@ -24,6 +24,37 @@ export function generateWGSL(func: FunctionDeclaration): string {
 ${prefix}
 fn ${name}(${signature}) ${returnType} {
 ${body}
+}
+`;
+}
+
+export function generateDeviceFunction(func: FunctionDeclaration): string {
+    const name = func.getName();
+    if (!name) {
+        throw new Error("Function must have a name");
+    }
+
+    // Generate signature
+    const params = func.getParameters().map(p => {
+        const n = p.getName();
+        const typeNode = p.getTypeNode();
+        const typeText = typeNode ? typeNode.getText() : p.getType().getText();
+        const type = mapType(typeText);
+        return `${n} : ${type}`;
+    }).join(", ");
+
+    const returnTypeNode = func.getReturnTypeNode();
+    const returnTypeText = returnTypeNode ? returnTypeNode.getText() : func.getReturnType().getText();
+    const returnType = returnTypeText === "void" ? "" : `-> ${mapType(returnTypeText)}`;
+
+    let body = "";
+    const bodyBlock = func.getBody();
+    if (bodyBlock && Node.isBlock(bodyBlock)) {
+        body = transpileBlock(bodyBlock);
+    }
+
+    return `fn ${name}(${params}) ${returnType} {
+${body}
 }`;
 }
 
