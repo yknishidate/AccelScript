@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import ReactDOM from 'react-dom/client'
-import VectorAdd from './demos/VectorAdd.gen'
+import VectorCompute from './demos/VectorCompute.gen'
 import Triangle from './demos/Triangle.gen'
 import Tests from './demos/Tests.gen'
 import Circles from './demos/Circles.gen'
@@ -17,7 +17,7 @@ function Layout() {
                     onClick={() => setDemo("vector")}
                     style={{ marginRight: 10, fontWeight: demo === "vector" ? 'bold' : 'normal' }}
                 >
-                    Vector Add (Compute)
+                    Vector Compute
                 </button>
                 <button
                     onClick={() => setDemo("triangle")}
@@ -51,7 +51,7 @@ function Layout() {
                 </button>
             </nav>
             <main>
-                {demo === "vector" && <VectorAdd />}
+                {demo === "vector" && <VectorCompute />}
                 {demo === "triangle" && <Triangle />}
                 {demo === "circles" && <Circles />}
                 {demo === "lines" && <Lines />}
