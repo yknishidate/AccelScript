@@ -116,7 +116,7 @@ describe('WGSL Generator', () => {
     it('should generate scalar bindings as uniform', () => {
         const func = getFunction(`
             /** @kernel */
-            function compute(a: Float32Array, width: u32, height: i32, factor: f32) {
+            function compute(a: SharedArray<f32>, width: u32, height: i32, factor: f32) {
                 const x = global_invocation_id.x;
             }
         `);
@@ -136,7 +136,7 @@ describe('WGSL Generator', () => {
             }
             
             /** @kernel */
-            function compute(image: Float32Array, params: Params) {
+            function compute(image: SharedArray<f32>, params: Params) {
                 const x = global_invocation_id.x;
             }
         `);
@@ -156,7 +156,7 @@ describe('WGSL Generator', () => {
     it('should handle vec2 and vec3 types', () => {
         const func = getFunction(`
             /** @kernel */
-            function compute(a: Float32Array, v2: vec2, v3: vec3) {
+            function compute(a: SharedArray<f32>, v2: vec2, v3: vec3) {
                 const x = global_invocation_id.x;
             }
         `);
@@ -168,7 +168,7 @@ describe('WGSL Generator', () => {
     it('should handle Int32Array and Uint32Array', () => {
         const func = getFunction(`
             /** @kernel */
-            function compute(ints: Int32Array, uints: Uint32Array) {
+            function compute(ints: SharedArray<i32>, uints: SharedArray<u32>) {
                 const x = global_invocation_id.x;
             }
         `);
@@ -705,6 +705,27 @@ describe('WGSL Generator', () => {
         `);
         const result = generateWGSL(func);
         expect(result).toContain('break;');
+    });
+    it('should handle SharedArray<vec2f>', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function compute(data: SharedArray<vec2f>) {
+                const x = global_invocation_id.x;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('@group(0) @binding(0) var<storage, read_write> data : array<vec2<f32>>;');
+    });
+
+    it('should handle SharedArray<f32>', () => {
+        const func = getFunction(`
+            /** @kernel */
+            function compute(data: SharedArray<f32>) {
+                const x = global_invocation_id.x;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).toContain('@group(0) @binding(0) var<storage, read_write> data : array<f32>;');
     });
 });
 

@@ -106,6 +106,16 @@ ${body}
 }
 
 function mapType(tsType: string): string {
+    // SharedArray types
+    const sharedArrayMatch = tsType.match(/^SharedArray<(.+)>$/);
+    if (sharedArrayMatch) {
+        const innerType = sharedArrayMatch[1];
+        // Recursively map the inner type (e.g. vec2f -> vec2<f32>)
+        // Note: array<T> in WGSL usually implies stride, but for now we map directly.
+        // runtime.ts handles the buffer creation.
+        return `array<${mapType(innerType)}>`;
+    }
+
     // Primitive types
     if (tsType === "number") return "f32";
     if (tsType === "boolean") return "bool";
@@ -113,20 +123,26 @@ function mapType(tsType: string): string {
     if (tsType === "i32") return "i32";
     if (tsType === "f32") return "f32";
 
-    // Array types
-    if (tsType.includes("Float32Array")) return "array<f32>";
-    if (tsType.includes("Int32Array")) return "array<i32>";
-    if (tsType.includes("Uint32Array")) return "array<u32>";
+    // Array types - REMOVED legacy support
+    // if (tsType.includes("Float32Array")) return "array<f32>";
+    // if (tsType.includes("Int32Array")) return "array<i32>";
+    // if (tsType.includes("Uint32Array")) return "array<u32>";
 
     // Vector types
-    if (tsType === "vec2") return "vec2<f32>";
-    if (tsType === "vec3") return "vec3<f32>";
-    if (tsType === "vec4") return "vec4<f32>";
+    if (tsType === "vec2" || tsType === "vec2f") return "vec2<f32>";
+    if (tsType === "vec3" || tsType === "vec3f") return "vec3<f32>";
+    if (tsType === "vec4" || tsType === "vec4f") return "vec4<f32>";
+    if (tsType === "vec2i") return "vec2<i32>";
+    if (tsType === "vec3i") return "vec3<i32>";
+    if (tsType === "vec4i") return "vec4<i32>";
+    if (tsType === "vec2u") return "vec2<u32>";
+    if (tsType === "vec3u") return "vec3<u32>";
+    if (tsType === "vec4u") return "vec4<u32>";
 
     // Matrix types
-    if (tsType === "mat2x2") return "mat2x2<f32>";
-    if (tsType === "mat3x3") return "mat3x3<f32>";
-    if (tsType === "mat4x4") return "mat4x4<f32>";
+    if (tsType === "mat2x2" || tsType === "mat2x2f") return "mat2x2<f32>";
+    if (tsType === "mat3x3" || tsType === "mat3x3f") return "mat3x3<f32>";
+    if (tsType === "mat4x4" || tsType === "mat4x4f") return "mat4x4<f32>";
 
     // Struct types - return as-is
     if (isStructType(tsType)) return tsType;
