@@ -4,6 +4,7 @@ export class SharedArray<T extends TypedArray = Float32Array> {
     private hostData: T;
     private deviceBuffer: GPUBuffer | null = null;
     private device: GPUDevice | null = null;
+
     public readonly shape: number[];
     public readonly ndim: number;
 
@@ -29,49 +30,31 @@ export class SharedArray<T extends TypedArray = Float32Array> {
         }
     }
 
+    /**
+     * Access the underlying TypedArray host data
+     */
     get data(): T {
         return this.hostData;
     }
 
+    /**
+     * Access the GPUBuffer (if created)
+     */
     get buffer(): GPUBuffer | null {
         return this.deviceBuffer;
     }
 
+    /**
+     * Total number of elements in the array
+     */
     get size(): number {
         return this.hostData.length;
     }
 
-    // Helper to get element at multi-dimensional index
-    at(...indices: number[]): number {
-        if (indices.length !== this.ndim) {
-            throw new Error(`Expected ${this.ndim} indices, got ${indices.length}`);
-        }
-        let index = 0;
-        let stride = 1;
-        for (let i = this.ndim - 1; i >= 0; i--) {
-            index += indices[i] * stride;
-            stride *= this.shape[i];
-        }
-        return this.hostData[index];
-    }
-
-    // Helper to set element at multi-dimensional index
-    set(...args: [...number[], number]): void {
-        const value = args[args.length - 1] as number;
-        const indices = args.slice(0, -1) as number[];
-
-        if (indices.length !== this.ndim) {
-            throw new Error(`Expected ${this.ndim} indices, got ${indices.length}`);
-        }
-        let index = 0;
-        let stride = 1;
-        for (let i = this.ndim - 1; i >= 0; i--) {
-            index += indices[i] * stride;
-            stride *= this.shape[i];
-        }
-        this.hostData[index] = value;
-    }
-
+    /**
+     * Ensure the GPU buffer exists and is up-to-date with host data.
+     * If buffer doesn't exist, it creates one and uploads data.
+     */
     async ensureBuffer(device: GPUDevice): Promise<GPUBuffer> {
         if (!this.deviceBuffer || this.device !== device) {
             this.device = device;
@@ -80,20 +63,31 @@ export class SharedArray<T extends TypedArray = Float32Array> {
                 usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
                 mappedAtCreation: true
             });
+
+            // Initialize buffer with current host data
             new (this.hostData.constructor as any)(this.deviceBuffer.getMappedRange()).set(this.hostData);
             this.deviceBuffer.unmap();
         }
         return this.deviceBuffer;
     }
 
+    /**
+     * Upload host data to the GPU buffer.
+     * Creates the buffer if it doesn't exist.
+     */
     async syncToDevice(device: GPUDevice): Promise<void> {
         const buffer = await this.ensureBuffer(device);
         device.queue.writeBuffer(buffer, 0, this.hostData.buffer, this.hostData.byteOffset, this.hostData.byteLength);
     }
 
+    /**
+     * Download data from GPU buffer to host memory.
+     * Updates the underlying TypedArray.
+     */
     async syncToHost(device: GPUDevice): Promise<void> {
         if (!this.deviceBuffer) return;
 
+        // Create a temporary staging buffer for reading
         const readBuffer = device.createBuffer({
             size: this.deviceBuffer.size,
             usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
@@ -105,10 +99,16 @@ export class SharedArray<T extends TypedArray = Float32Array> {
 
         await readBuffer.mapAsync(GPUMapMode.READ);
         const result = new (this.hostData.constructor as any)(readBuffer.getMappedRange());
+
+        // Update host data
         this.hostData.set(result);
+
         readBuffer.destroy();
     }
 
+    /**
+     * Destroy the GPU buffer to free memory.
+     */
     destroy(): void {
         if (this.deviceBuffer) {
             this.deviceBuffer.destroy();
