@@ -39,12 +39,22 @@ export function generateDeviceFunction(func: FunctionDeclaration): string {
         const n = p.getName();
         const typeNode = p.getTypeNode();
         const typeText = typeNode ? typeNode.getText() : p.getType().getText();
+
+        if (typeText === "number") {
+            throw new Error(`Device function '${name}' parameter '${n}' must have explicit type (e.g. f32, i32, u32), not 'number'`);
+        }
+
         const type = mapType(typeText);
         return `${n} : ${type}`;
     }).join(", ");
 
     const returnTypeNode = func.getReturnTypeNode();
     const returnTypeText = returnTypeNode ? returnTypeNode.getText() : func.getReturnType().getText();
+
+    if (returnTypeText === "number") {
+        throw new Error(`Device function '${name}' return type must have explicit type (e.g. f32, i32, u32), not 'number'`);
+    }
+
     const returnType = returnTypeText === "void" ? "" : `-> ${mapType(returnTypeText)}`;
 
     let body = "";

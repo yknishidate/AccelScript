@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { runtime, SharedArray, f32 } from "@accelscript/runtime";
 
 /** @device */
-function sigmoid(x: number): number {
+function sigmoid(x: f32): f32 {
     return 1.0 / (1.0 + exp(-x));
 }
 

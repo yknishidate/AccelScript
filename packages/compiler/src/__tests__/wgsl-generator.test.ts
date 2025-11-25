@@ -731,7 +731,7 @@ describe('WGSL Generator', () => {
     it('should generate device function', () => {
         const func = getFunction(`
             /** @device */
-            function sq(x: number): number {
+            function sq(x: f32): f32 {
                 return x * x;
             }
         `);
@@ -739,6 +739,16 @@ describe('WGSL Generator', () => {
         expect(result).toContain('fn sq(x : f32) -> f32 {');
         expect(result).toContain('return x * x;');
         expect(result).toContain('}');
+    });
+
+    it('should throw error for device function with number type', () => {
+        const func = getFunction(`
+            /** @device */
+            function sq(x: number): number {
+                return x * x;
+            }
+        `);
+        expect(() => generateDeviceFunction(func)).toThrow("must have explicit type");
     });
 });
 

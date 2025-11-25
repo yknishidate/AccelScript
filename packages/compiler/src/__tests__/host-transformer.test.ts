@@ -88,7 +88,7 @@ describe('Host Transformer', () => {
     it('should include device functions in kernel WGSL', () => {
         const code = `
             /** @device */
-            function sq(x: number): number {
+            function sq(x: f32): f32 {
                 return x * x;
             }
 
