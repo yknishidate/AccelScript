@@ -7,56 +7,56 @@ import Circles from './demos/Circles.gen'
 import Lines from './demos/Lines.gen'
 import ImageDemo from './demos/ImageDemo.gen'
 
+import './index.css'
+
 function Layout() {
     const [demo, setDemo] = useState<"vector" | "triangle" | "tests" | "circles" | "lines" | "image">("vector");
 
+    const demos = [
+        { id: "vector", label: "Vector Compute", description: "Basic vector operations on GPU" },
+        { id: "triangle", label: "Triangle", description: "Basic graphics rendering" },
+        { id: "circles", label: "Circles", description: "Interactive particle system" },
+        { id: "lines", label: "Lines", description: "Line drawing demo" },
+        { id: "image", label: "Image Processing", description: "Image manipulation filters" },
+        { id: "tests", label: "Tests", description: "Unit tests visualization" },
+    ] as const;
+
+    const currentDemo = demos.find(d => d.id === demo);
+
     return (
-        <div style={{ fontFamily: 'sans-serif' }}>
-            <nav style={{ padding: 10, borderBottom: '1px solid #ccc', marginBottom: 20 }}>
-                <button
-                    onClick={() => setDemo("vector")}
-                    style={{ marginRight: 10, fontWeight: demo === "vector" ? 'bold' : 'normal' }}
-                >
-                    Vector Compute
-                </button>
-                <button
-                    onClick={() => setDemo("triangle")}
-                    style={{ marginRight: 10, fontWeight: demo === "triangle" ? 'bold' : 'normal' }}
-                >
-                    Triangle (Graphics)
-                </button>
-                <button
-                    onClick={() => setDemo("circles")}
-                    style={{ marginRight: 10, fontWeight: demo === "circles" ? 'bold' : 'normal' }}
-                >
-                    Circles (Drawing)
-                </button>
-                <button
-                    onClick={() => setDemo("lines")}
-                    style={{ marginRight: 10, fontWeight: demo === "lines" ? 'bold' : 'normal' }}
-                >
-                    Lines (Drawing)
-                </button>
-                <button
-                    onClick={() => setDemo("image")}
-                    style={{ marginRight: 10, fontWeight: demo === "image" ? 'bold' : 'normal' }}
-                >
-                    Image Demo
-                </button>
-                <button
-                    onClick={() => setDemo("tests")}
-                    style={{ fontWeight: demo === "tests" ? 'bold' : 'normal' }}
-                >
-                    Tests
-                </button>
-            </nav>
-            <main>
-                {demo === "vector" && <VectorCompute />}
-                {demo === "triangle" && <Triangle />}
-                {demo === "circles" && <Circles />}
-                {demo === "lines" && <Lines />}
-                {demo === "image" && <ImageDemo />}
-                {demo === "tests" && <Tests />}
+        <div className="app-container">
+            <aside className="sidebar">
+                <div className="sidebar-header">
+                    <div className="sidebar-title">
+                        ⚡ AccelScript
+                    </div>
+                </div>
+                <nav className="sidebar-nav">
+                    {demos.map((d) => (
+                        <button
+                            key={d.id}
+                            onClick={() => setDemo(d.id)}
+                            className={`nav-button ${demo === d.id ? 'active' : ''}`}
+                        >
+                            {d.label}
+                        </button>
+                    ))}
+                </nav>
+            </aside>
+            <main className="main-content">
+                <div className="content-wrapper">
+                    <header className="demo-header">
+                        <h1 className="demo-title">{currentDemo?.label}</h1>
+                        <p className="demo-description">{currentDemo?.description}</p>
+                    </header>
+
+                    {demo === "vector" && <VectorCompute />}
+                    {demo === "triangle" && <Triangle />}
+                    {demo === "circles" && <Circles />}
+                    {demo === "lines" && <Lines />}
+                    {demo === "image" && <ImageDemo />}
+                    {demo === "tests" && <Tests />}
+                </div>
             </main>
         </div>
     );
