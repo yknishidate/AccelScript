@@ -193,7 +193,12 @@ struct Circle {
     color: vec4<f32>,
 }
 
+struct Globals {
+    aspect: f32,
+}
+
 @group(0) @binding(0) var<storage, read> circles: array<Circle>;
+@group(0) @binding(1) var<uniform> globals: Globals;
 
 @vertex
 fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) instanceIndex: u32) -> VertexOutput {
@@ -214,8 +219,10 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32, @builtin(instance_index) ins
     let localPos = positions[vertexIndex];
     output.localPos = localPos;
     
-    // Transform to NDC space
-    let worldPos = circle.center + localPos * circle.radius;
+    // Transform to NDC space with aspect ratio correction
+    // We scale the x-offset by 1/aspect to keep the circle round
+    let aspectCorrection = vec2<f32>(1.0 / globals.aspect, 1.0);
+    let worldPos = circle.center + localPos * circle.radius * aspectCorrection;
     output.position = vec4<f32>(worldPos, 0.0, 1.0);
     
     output.center = circle.center;
@@ -294,7 +301,12 @@ struct Line {
     _padding2: f32,
 };
 
+struct Globals {
+    aspect: f32,
+}
+
 @group(0) @binding(0) var<storage, read> linesData: array<Line>;
+@group(0) @binding(1) var<uniform> globals: Globals;
 
 @vertex
 fn vs_main(
@@ -308,24 +320,40 @@ fn vs_main(
     let p0 = line.begin;
     let p1 = line.end;
 
-    let dir = p1 - p0;
-    let len = length(dir);
+    // Adjust direction for aspect ratio to calculate correct normal
+    let aspect = globals.aspect;
+    let p0_screen = p0 * vec2<f32>(aspect, 1.0);
+    let p1_screen = p1 * vec2<f32>(aspect, 1.0);
+
+    let dir_screen = p1_screen - p0_screen;
+    let len_screen = length(dir_screen);
+    
     // avoid NaN if begin == end
-    var tangent = vec2<f32>(1.0, 0.0);
-    if (len > 0.0) {
-        tangent = dir / len;
+    var tangent_screen = vec2<f32>(1.0, 0.0);
+    if (len_screen > 0.0) {
+        tangent_screen = dir_screen / len_screen;
     }
-    let normal = vec2<f32>(-tangent.y, tangent.x);
+    let normal_screen = vec2<f32>(-tangent_screen.y, tangent_screen.x);
+    
+    // Convert normal back to NDC offset
+    // We want the width to be constant, so we apply width in screen space logic?
+    // If width is 0.1, we want 0.1 units in Y-space (height).
+    // So the offset in screen space (relative to height) is width * 0.5.
+    // The offset vector in screen space is normal_screen * halfWidth.
+    // Then convert back to NDC: divide X by aspect.
+    
     let halfWidth = line.width * 0.5;
+    let offset_screen = normal_screen * halfWidth;
+    let offset_ndc = offset_screen * vec2<f32>(1.0 / aspect, 1.0);
 
     // 2D quad for the line (two triangles)
     var positions = array<vec2<f32>, 6>(
-        p0 - normal * halfWidth,
-        p1 - normal * halfWidth,
-        p1 + normal * halfWidth,
-        p0 - normal * halfWidth,
-        p1 + normal * halfWidth,
-        p0 + normal * halfWidth
+        p0 - offset_ndc,
+        p1 - offset_ndc,
+        p1 + offset_ndc,
+        p0 - offset_ndc,
+        p1 + offset_ndc,
+        p0 + offset_ndc
     );
 
     let worldPos = positions[vertexIndex];
@@ -376,14 +404,14 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
         return this.linePipeline;
     }
 
-    async circle(center: [number, number], radius: number, color: [number, number, number, number]) {
+    async circle(center: [number, number], radius: number, color: [number, number, number, number], options: { aspect?: number } = {}) {
         const c = new SharedArray(2); c.data.set(center);
         const r = new SharedArray(1); r.data[0] = radius;
         const col = new SharedArray(4); col.data.set(color);
-        return this.circles(c, r, col);
+        return this.circles(c, r, col, options);
     }
 
-    async circles(centers: SharedArray, radii: SharedArray, colors: SharedArray) {
+    async circles(centers: SharedArray, radii: SharedArray, colors: SharedArray, options: { aspect?: number } = {}) {
         if (!this.context) throw new Error("Canvas not setup");
         await this.init();
         const device = this.device!;
@@ -413,13 +441,30 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
         new Float32Array(circleBuffer.getMappedRange()).set(circleData);
         circleBuffer.unmap();
 
+        // Aspect ratio uniform
+        const aspect = options.aspect ?? (this.context.canvas.width / this.context.canvas.height);
+        const uniformBuffer = device.createBuffer({
+            size: 16, // Minimum uniform size
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            mappedAtCreation: true,
+            label: "Globals buffer",
+        });
+        new Float32Array(uniformBuffer.getMappedRange())[0] = aspect;
+        uniformBuffer.unmap();
+
         const pipeline = await this.getCirclePipeline();
         const bindGroup = device.createBindGroup({
             layout: pipeline.getBindGroupLayout(0),
-            entries: [{
-                binding: 0,
-                resource: { buffer: circleBuffer },
-            }],
+            entries: [
+                {
+                    binding: 0,
+                    resource: { buffer: circleBuffer },
+                },
+                {
+                    binding: 1,
+                    resource: { buffer: uniformBuffer },
+                }
+            ],
         });
 
         const commandEncoder = device.createCommandEncoder();
@@ -443,6 +488,7 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
         device.queue.submit([commandEncoder.finish()]);
 
         circleBuffer.destroy();
+        uniformBuffer.destroy();
     }
 
     async line(
@@ -450,6 +496,7 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
         end: [number, number],
         width: number,
         color: [number, number, number, number],
+        options: { aspect?: number } = {}
     ) {
         // Helper to create temporary SharedArrays for single line drawing
         // This is inefficient but keeps the API consistent
@@ -458,7 +505,7 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
         const w = new SharedArray(1); w.data[0] = width;
         const c = new SharedArray(4); c.data.set(color);
 
-        return this.lines(b, e, w, c);
+        return this.lines(b, e, w, c, options);
     }
 
     async lines(
@@ -466,6 +513,7 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
         end: SharedArray,
         width: SharedArray,
         color: SharedArray,
+        options: { aspect?: number } = {}
     ) {
         if (!this.context) throw new Error("Canvas not setup");
         await this.init();
@@ -537,13 +585,30 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
         new Float32Array(lineBuffer.getMappedRange()).set(lineData);
         lineBuffer.unmap();
 
+        // Aspect ratio uniform
+        const aspect = options.aspect ?? (this.context.canvas.width / this.context.canvas.height);
+        const uniformBuffer = device.createBuffer({
+            size: 16, // Minimum uniform size
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            mappedAtCreation: true,
+            label: "Globals buffer",
+        });
+        new Float32Array(uniformBuffer.getMappedRange())[0] = aspect;
+        uniformBuffer.unmap();
+
         const pipeline = await this.getLinePipeline();
         const bindGroup = device.createBindGroup({
             layout: pipeline.getBindGroupLayout(0),
-            entries: [{
-                binding: 0,
-                resource: { buffer: lineBuffer },
-            }],
+            entries: [
+                {
+                    binding: 0,
+                    resource: { buffer: lineBuffer },
+                },
+                {
+                    binding: 1,
+                    resource: { buffer: uniformBuffer },
+                }
+            ],
         });
 
         const commandEncoder = device.createCommandEncoder();
@@ -567,6 +632,7 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
         device.queue.submit([commandEncoder.finish()]);
 
         lineBuffer.destroy();
+        uniformBuffer.destroy();
     }
 
     // Display a 2D SharedArray as an image on the canvas
