@@ -62,6 +62,9 @@ export default function Triangle() {
 
             const render = async () => {
                 const time = (performance.now() - startTime) / 1000;
+                // @ts-ignore
+                await runtime.clear(0.2, 0.2, 0.2);
+                // @ts-ignore
                 await runtime.draw(pipeline, 3, [f32(time)]);
                 animationFrameId = requestAnimationFrame(render);
             };

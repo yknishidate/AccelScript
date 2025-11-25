@@ -53,8 +53,9 @@ export default function Lines() {
                 }
 
                 // @ts-ignore
+                await runtime.clear(0.2, 0.2, 0.2);
+                // @ts-ignore
                 await runtime.lines(begins, ends, widths, colors);
-                // await runtime.line([0.0, 0.0], [1.0, 1.0], 0.05, [1.0, 0.0, 0.0, 1.0]);
 
                 requestAnimationFrame(animate);
             };

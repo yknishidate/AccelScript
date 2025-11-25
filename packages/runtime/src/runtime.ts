@@ -26,6 +26,30 @@ export class Runtime {
         });
     }
 
+    async clear(r: number, g: number, b: number, a: number = 1.0) {
+        if (!this.context) throw new Error("Canvas not setup");
+        const device = this.device!;
+
+        const commandEncoder = device.createCommandEncoder();
+        const textureView = this.context.getCurrentTexture().createView();
+
+        const renderPassDescriptor: GPURenderPassDescriptor = {
+            colorAttachments: [
+                {
+                    view: textureView,
+                    clearValue: { r, g, b, a },
+                    loadOp: "clear",
+                    storeOp: "store",
+                },
+            ],
+        };
+
+        const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
+        passEncoder.end();
+
+        device.queue.submit([commandEncoder.finish()]);
+    }
+
     async createRenderPipeline(desc: { vertex: string, fragment: string, vertexEntryPoint: string, fragmentEntryPoint: string }) {
         await this.init();
         const device = this.device!;
@@ -146,7 +170,7 @@ export class Runtime {
                 {
                     view: textureView,
                     clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                    loadOp: "clear",
+                    loadOp: "load",
                     storeOp: "store",
                 },
             ],
@@ -474,7 +498,7 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
             colorAttachments: [{
                 view: textureView,
                 clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                loadOp: "clear",
+                loadOp: "load",
                 storeOp: "store",
             }],
         };
@@ -618,7 +642,7 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
             colorAttachments: [{
                 view: textureView,
                 clearValue: { r: 0.0, g: 0.0, b: 0.0, a: 1.0 },
-                loadOp: "clear",
+                loadOp: "load",
                 storeOp: "store",
             }],
         };
