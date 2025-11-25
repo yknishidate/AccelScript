@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { runtime, SharedArray, vec2f } from "@accelscript/runtime";
+import { runtime, SharedArray, vec2f, f32 } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
 
 
@@ -15,19 +15,19 @@ export default function Lines() {
             const numLines = 50;
             const begins = new SharedArray(vec2f, numLines);
             const ends = new SharedArray(vec2f, numLines);
-            const widths = new Float32Array(numLines);
-            const colors = new Float32Array(numLines * 4);
+            const widths = new SharedArray(f32, numLines);
+            const colors = new SharedArray(f32, numLines * 4);
 
             for (let i = 0; i < numLines; i++) {
                 begins.data[i * 2 + 0] = Math.random() * 2.0 - 1.0;
                 begins.data[i * 2 + 1] = Math.random() * 2.0 - 1.0;
                 ends.data[i * 2 + 0] = Math.random() * 2.0 - 1.0;
                 ends.data[i * 2 + 1] = Math.random() * 2.0 - 1.0;
-                widths[i] = 0.05;
-                colors[i * 4 + 0] = Math.random() * 0.25 + 0.75;
-                colors[i * 4 + 1] = Math.random() * 0.25 + 0.75;
-                colors[i * 4 + 2] = Math.random() * 0.25 + 0.75;
-                colors[i * 4 + 3] = 1.0;
+                widths.data[i] = 0.05;
+                colors.data[i * 4 + 0] = Math.random() * 0.25 + 0.75;
+                colors.data[i * 4 + 1] = Math.random() * 0.25 + 0.75;
+                colors.data[i * 4 + 2] = Math.random() * 0.25 + 0.75;
+                colors.data[i * 4 + 3] = 1.0;
             }
 
             const startTime = performance.now();
@@ -47,13 +47,13 @@ export default function Lines() {
                     ends.data[i * 2 + 1] = Math.cos(time * 0.6 + i * 0.1 + Math.PI) * 0.8;
 
                     // Dynamic colors
-                    colors[i * 4 + 0] = 0.5 + 0.5 * Math.sin(time + i * 0.2);
-                    colors[i * 4 + 1] = 0.5 + 0.5 * Math.cos(time * 1.2 + i * 0.3);
-                    colors[i * 4 + 2] = 0.5 + 0.5 * Math.sin(time * 0.8 + i * 0.4);
+                    colors.data[i * 4 + 0] = 0.5 + 0.5 * Math.sin(time + i * 0.2);
+                    colors.data[i * 4 + 1] = 0.5 + 0.5 * Math.cos(time * 1.2 + i * 0.3);
+                    colors.data[i * 4 + 2] = 0.5 + 0.5 * Math.sin(time * 0.8 + i * 0.4);
                 }
 
                 // @ts-ignore
-                await runtime.lines(begins.data, ends.data, widths, colors);
+                await runtime.lines(begins, ends, widths, colors);
                 // await runtime.line([0.0, 0.0], [1.0, 1.0], 0.05, [1.0, 0.0, 0.0, 1.0]);
 
                 requestAnimationFrame(animate);

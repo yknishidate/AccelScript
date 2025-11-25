@@ -65,22 +65,6 @@ export class Runtime {
                     binding: i,
                     resource: { buffer }
                 });
-            } else if (arg instanceof Float32Array) {
-                // Create temporary buffer for plain Float32Array
-                const buffer = device.createBuffer({
-                    size: arg.byteLength,
-                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
-                    mappedAtCreation: true,
-                    label: "Float32Array buffer",
-                });
-                new Float32Array(buffer.getMappedRange()).set(arg);
-                buffer.unmap();
-
-                buffersToDestroy.push(buffer);
-                entries.push({
-                    binding: i,
-                    resource: { buffer }
-                });
             } else if (typeof arg === 'number' || (typeof arg === 'object' && arg !== null && 'type' in arg && 'value' in arg)) {
                 // Handle scalar values (number or ScalarWrapper)
                 const isWrapper = typeof arg === 'object';
@@ -393,32 +377,31 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
     }
 
     async circle(center: [number, number], radius: number, color: [number, number, number, number]) {
-        return this.circles(
-            new Float32Array([center[0], center[1]]),
-            new Float32Array([radius]),
-            new Float32Array(color)
-        );
+        const c = new SharedArray(2); c.data.set(center);
+        const r = new SharedArray(1); r.data[0] = radius;
+        const col = new SharedArray(4); col.data.set(color);
+        return this.circles(c, r, col);
     }
 
-    async circles(centers: Float32Array, radii: Float32Array, colors: Float32Array) {
+    async circles(centers: SharedArray, radii: SharedArray, colors: SharedArray) {
         if (!this.context) throw new Error("Canvas not setup");
         await this.init();
         const device = this.device!;
 
-        const numCircles = radii.length;
+        const numCircles = radii.data.length;
 
         // Pack circle data: [center.x, center.y, radius, padding, color.r, color.g, color.b, color.a]
         // Each circle is 8 floats (32 bytes) for alignment
         const circleData = new Float32Array(numCircles * 8);
         for (let i = 0; i < numCircles; i++) {
-            circleData[i * 8 + 0] = centers[i * 2 + 0];
-            circleData[i * 8 + 1] = centers[i * 2 + 1];
-            circleData[i * 8 + 2] = radii[i];
+            circleData[i * 8 + 0] = centers.data[i * 2 + 0];
+            circleData[i * 8 + 1] = centers.data[i * 2 + 1];
+            circleData[i * 8 + 2] = radii.data[i];
             circleData[i * 8 + 3] = 0; // padding
-            circleData[i * 8 + 4] = colors[i * 4 + 0];
-            circleData[i * 8 + 5] = colors[i * 4 + 1];
-            circleData[i * 8 + 6] = colors[i * 4 + 2];
-            circleData[i * 8 + 7] = colors[i * 4 + 3];
+            circleData[i * 8 + 4] = colors.data[i * 4 + 0];
+            circleData[i * 8 + 5] = colors.data[i * 4 + 1];
+            circleData[i * 8 + 6] = colors.data[i * 4 + 2];
+            circleData[i * 8 + 7] = colors.data[i * 4 + 3];
         }
 
         const circleBuffer = device.createBuffer({
@@ -468,40 +451,30 @@ fn fs_main(input: LineVertexOutput) -> @location(0) vec4<f32> {
         width: number,
         color: [number, number, number, number],
     ) {
-        return this.lines(
-            new Float32Array([begin[0], begin[1]]),
-            new Float32Array([end[0], end[1]]),
-            new Float32Array([width]),
-            new Float32Array(color),
-        );
+        // Helper to create temporary SharedArrays for single line drawing
+        // This is inefficient but keeps the API consistent
+        const b = new SharedArray(2); b.data.set(begin);
+        const e = new SharedArray(2); e.data.set(end);
+        const w = new SharedArray(1); w.data[0] = width;
+        const c = new SharedArray(4); c.data.set(color);
+
+        return this.lines(b, e, w, c);
     }
 
     async lines(
-        begin: Float32Array | [number, number],
-        end: Float32Array | [number, number],
-        width: Float32Array | number,
-        color: Float32Array | [number, number, number, number],
+        begin: SharedArray,
+        end: SharedArray,
+        width: SharedArray,
+        color: SharedArray,
     ) {
         if (!this.context) throw new Error("Canvas not setup");
         await this.init();
         const device = this.device!;
 
-        // Normalize single element or array to Float32Array
-        const beginArray = begin instanceof Float32Array
-            ? begin
-            : new Float32Array([begin[0], begin[1]]);
-
-        const endArray = end instanceof Float32Array
-            ? end
-            : new Float32Array([end[0], end[1]]);
-
-        const widthArray = width instanceof Float32Array
-            ? width
-            : new Float32Array([width]);
-
-        const colorArray = color instanceof Float32Array
-            ? color
-            : new Float32Array(color);
+        const beginArray = begin.data;
+        const endArray = end.data;
+        const widthArray = width.data;
+        const colorArray = color.data;
 
         const numLines = widthArray.length;
 

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { runtime, SharedArray, vec2f } from "@accelscript/runtime";
+import { runtime, SharedArray, vec2f, f32 } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
 
 /** @kernel */
@@ -41,19 +41,19 @@ export default function Circles() {
             const numCircles = 50;
             const centers = new SharedArray(vec2f, numCircles);
             const velocities = new SharedArray(vec2f, numCircles);
-            const radii = new Float32Array(numCircles);
-            const colors = new Float32Array(numCircles * 4);
+            const radii = new SharedArray(f32, numCircles);
+            const colors = new SharedArray(f32, numCircles * 4);
 
             for (let i = 0; i < numCircles; i++) {
                 centers.data[i * 2 + 0] = Math.random() * 2 - 1;
                 centers.data[i * 2 + 1] = Math.random() * 2 - 1;
                 velocities.data[i * 2 + 0] = (Math.random() - 0.5) * 2;
                 velocities.data[i * 2 + 1] = (Math.random() - 0.5) * 2;
-                radii[i] = Math.random() * 0.05 + 0.03;
-                colors[i * 4 + 0] = Math.random();
-                colors[i * 4 + 1] = Math.random();
-                colors[i * 4 + 2] = Math.random();
-                colors[i * 4 + 3] = 0.8;
+                radii.data[i] = Math.random() * 0.05 + 0.03;
+                colors.data[i * 4 + 0] = Math.random();
+                colors.data[i * 4 + 1] = Math.random();
+                colors.data[i * 4 + 2] = Math.random();
+                colors.data[i * 4 + 3] = 0.8;
             }
 
             // Animation loop
@@ -63,7 +63,7 @@ export default function Circles() {
                 // @ts-ignore
                 await updatePositions(centers, velocities);
                 // @ts-ignore
-                await runtime.circles(centers.data, radii, colors);
+                await runtime.circles(centers, radii, colors);
 
                 requestAnimationFrame(animate);
             };
