@@ -7,7 +7,7 @@
         "dev": "vite",
         "build": "tsc && vite build",
         "preview": "vite preview",
-        "compile": "node ../compiler/dist/index.js src/demos/VectorCompute.tsx -o src/demos/VectorCompute.gen.tsx && node ../compiler/dist/index.js src/demos/Triangle.tsx -o src/demos/Triangle.gen.tsx && node ../compiler/dist/index.js src/demos/Circles.tsx -o src/demos/Circles.gen.tsx && node ../compiler/dist/index.js src/demos/Lines.tsx -o src/demos/Lines.gen.tsx && node ../compiler/dist/index.js src/demos/ImageDemo.tsx -o src/demos/ImageDemo.gen.tsx && node ../compiler/dist/index.js src/demos/Tests.tsx -o src/demos/Tests.gen.tsx",
+        "compile": "node ../compiler/dist/index.js src/demos/VectorCompute.tsx -o src/demos/VectorCompute.gen.tsx && node ../compiler/dist/index.js src/demos/Triangle.tsx -o src/demos/Triangle.gen.tsx && node ../compiler/dist/index.js src/demos/Circles.tsx -o src/demos/Circles.gen.tsx && node ../compiler/dist/index.js src/demos/Lines.tsx -o src/demos/Lines.gen.tsx && node ../compiler/dist/index.js src/demos/ImageDemo.tsx -o src/demos/ImageDemo.gen.tsx && node ../compiler/dist/index.js src/demos/Tests.tsx -o src/demos/Tests.gen.tsx && node ../compiler/dist/index.js src/demos/MouseDemo.tsx -o src/demos/MouseDemo.gen.tsx",
         "test": "echo \"No tests specified\" && exit 0"
     },
     "dependencies": {

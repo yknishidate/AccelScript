@@ -41,9 +41,7 @@ export default function VectorCompute() {
     };
 
     return (
-        <div style={{ padding: 20 }}>
-            <h2>Vector Compute Demo</h2>
-            <p>Apply Sigmoid function on GPU using @device function</p>
+        <div>
             <button onClick={run}>Run GPU Kernel</button>
             <p>{result}</p>
         </div>

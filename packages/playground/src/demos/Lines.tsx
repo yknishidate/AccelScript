@@ -71,10 +71,11 @@ export default function Lines() {
     }, [isReady]);
 
     return (
-        <div style={{ padding: 20 }}>
-            <h2>Lines Demo</h2>
-            <p>Lines are drawn using the lines kernel</p>
-            <canvas ref={canvasRef} width={640} height={480} style={{ border: '1px solid #ccc' }} />
-        </div>
+        <canvas
+            ref={canvasRef}
+            width={800}
+            height={600}
+            style={{ width: "100%", height: "100%", display: "block" }}
+        />
     );
 }

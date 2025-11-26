@@ -81,10 +81,11 @@ export default function Circles() {
     }, [isReady]);
 
     return (
-        <div style={{ padding: 20 }}>
-            <h2>Animated Circles</h2>
-            <p>Using SharedArray for efficient GPU/CPU buffer reuse</p>
-            <canvas ref={canvasRef} width={640} height={480} style={{ border: '1px solid #ccc' }} />
-        </div>
+        <canvas
+            ref={canvasRef}
+            width={800}
+            height={600}
+            style={{ width: "100%", height: "100%", display: "block" }}
+        />
     );
 }

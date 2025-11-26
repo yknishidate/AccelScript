@@ -2,23 +2,23 @@ import React, { useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import VectorCompute from './demos/VectorCompute.gen'
 import Triangle from './demos/Triangle.gen'
-import Tests from './demos/Tests.gen'
 import Circles from './demos/Circles.gen'
 import Lines from './demos/Lines.gen'
 import ImageDemo from './demos/ImageDemo.gen'
+import MouseDemo from './demos/MouseDemo.gen'
 
 import './index.css'
 
 function Layout() {
-    const [demo, setDemo] = useState<"vector" | "triangle" | "tests" | "circles" | "lines" | "image">("vector");
+    const [demo, setDemo] = useState<"vector" | "triangle" | "tests" | "circles" | "lines" | "image" | "mouse">("mouse");
 
     const demos = [
+        { id: "mouse", label: "Mouse", description: "Mouse interaction demo" },
         { id: "vector", label: "Vector Compute", description: "Basic vector operations on GPU" },
         { id: "triangle", label: "Triangle", description: "Basic graphics rendering" },
         { id: "circles", label: "Circles", description: "Interactive particle system" },
         { id: "lines", label: "Lines", description: "Line drawing demo" },
         { id: "image", label: "Image Processing", description: "Image manipulation filters" },
-        { id: "tests", label: "Tests", description: "Unit tests visualization" },
     ] as const;
 
     const currentDemo = demos.find(d => d.id === demo);
@@ -55,7 +55,7 @@ function Layout() {
                     {demo === "circles" && <Circles />}
                     {demo === "lines" && <Lines />}
                     {demo === "image" && <ImageDemo />}
-                    {demo === "tests" && <Tests />}
+                    {demo === "mouse" && <MouseDemo />}
                 </div>
             </main>
         </div>

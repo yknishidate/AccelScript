@@ -24,6 +24,38 @@ export class Runtime {
             format: this.presentationFormat,
             alphaMode: "premultiplied",
         });
+
+        // Initialize globals
+        const g = globalThis as any;
+        if (!g.mouse) g.mouse = g.vec2f(0, 0);
+        if (g.mouseDown === undefined) g.mouseDown = false;
+        if (g.mouseClick === undefined) g.mouseClick = false;
+
+        // Add event listeners
+        const updateMouse = (e: MouseEvent) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX - rect.left) / rect.width * 2 - 1;
+            const y = 1 - (e.clientY - rect.top) / rect.height * 2;
+            g.mouse[0] = x;
+            g.mouse[1] = y;
+        };
+
+        canvas.addEventListener("mousemove", updateMouse);
+        canvas.addEventListener("mousedown", (e) => {
+            updateMouse(e);
+            g.mouseDown = true;
+        });
+        canvas.addEventListener("mouseup", (e) => {
+            updateMouse(e);
+            g.mouseDown = false;
+        });
+        canvas.addEventListener("click", (e) => {
+            updateMouse(e);
+            g.mouseClick = true;
+            // Reset click after a short delay or next frame? 
+            // For now, let's just set it. User might need to reset it.
+            setTimeout(() => { g.mouseClick = false; }, 100);
+        });
     }
 
     async clear(r: number, g: number, b: number, a: number = 1.0) {
