@@ -7,6 +7,8 @@ interface Params {
     width: u32;
     height: u32;
     frame: u32;
+    cameraPos: vec4; // w unused
+    cameraDir: vec4; // w unused
 }
 
 /** @device */
@@ -133,8 +135,12 @@ async function compute(image: SharedArray<vec4f>, params: Params) {
     const p = vec2(((uv.x + jitter.x) * 2.0 - 1.0) * aspect, (uv.y + jitter.y) * 2.0 - 1.0) * screenSize;
 
     // Camera
-    const ro = vec3(0.0, 0.0, -5.0);
-    const rd = normalize(vec3(p.x, p.y, 1.0));
+    const ro = params.cameraPos.xyz;
+    const camDir = normalize(params.cameraDir.xyz);
+    const camRight = normalize(cross(vec3(0.0, 1.0, 0.0), camDir));
+    const camUp = cross(camDir, camRight);
+
+    const rd = normalize(p.x * camRight + p.y * camUp + camDir);
 
     let col = vec3(0.0, 0.0, 0.0);
     let curAtten = vec3(1.0, 1.0, 1.0);
@@ -200,6 +206,48 @@ export default function RayTracing() {
         let animating = true;
         let frameCount = 1;
 
+        // Camera state
+        let azimuth = -1.57; // Looking at -Z
+        let elevation = 0.0;
+        let distance = 5.0;
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const handleMouseDown = (e: MouseEvent) => {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        };
+
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDragging) return;
+            const deltaX = e.clientX - lastMouseX;
+            const deltaY = e.clientY - lastMouseY;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+
+            azimuth -= deltaX * 0.01;
+            elevation += deltaY * 0.01;
+
+            // Clamp elevation to avoid flipping
+            elevation = Math.max(-1.5, Math.min(1.5, elevation));
+
+            // Reset accumulation
+            frameCount = 1;
+        };
+
+        const handleMouseUp = () => {
+            isDragging = false;
+        };
+
+        canvas.addEventListener('mousedown', handleMouseDown);
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+
         const init = async () => {
             const width = 800;
             const height = 600;
@@ -208,15 +256,23 @@ export default function RayTracing() {
                 radius: 1.0,
                 width: u32(width),
                 height: u32(height),
-                frame: u32(1)
+                frame: u32(1),
+                cameraPos: vec4f(0, 0, 0, 0),
+                cameraDir: vec4f(0, 0, 0, 0)
             };
 
             const image = new SharedArray(vec4f, [height, width]);
 
-            const startTime = performance.now();
-
             const render = async () => {
                 if (!animating) return;
+
+                // Update camera
+                const camX = distance * Math.cos(elevation) * Math.cos(azimuth);
+                const camY = distance * Math.sin(elevation);
+                const camZ = distance * Math.cos(elevation) * Math.sin(azimuth);
+
+                params.cameraPos = vec4f(camX, camY, camZ, 0);
+                params.cameraDir = vec4f(-camX, -camY, -camZ, 0); // Look at origin
 
                 params.frame = u32(frameCount);
 
@@ -239,6 +295,9 @@ export default function RayTracing() {
 
         return () => {
             animating = false;
+            canvas.removeEventListener('mousedown', handleMouseDown);
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
         };
     }, [isReady]);
 
