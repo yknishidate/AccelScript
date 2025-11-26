@@ -828,39 +828,74 @@ fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     }
 
     /**
+     * Get WGSL alignment for a value
+     */
+    private getAlignment(value: any): number {
+        if (typeof value === 'number') return 4;
+        if (value && typeof value === 'object') {
+            if ('type' in value && 'value' in value) return 4; // ScalarWrapper
+            if (value instanceof Float32Array || value instanceof Int32Array || value instanceof Uint32Array) {
+                switch (value.length) {
+                    case 2: return 8;  // vec2
+                    case 3: return 16; // vec3
+                    case 4: return 16; // vec4
+                    case 16: return 16; // mat4x4
+                }
+            }
+        }
+        return 4; // Default
+    }
+
+    /**
+     * Get byte size of a value
+     */
+    private getSize(value: any): number {
+        if (typeof value === 'number') return 4;
+        if (value && typeof value === 'object') {
+            if ('type' in value && 'value' in value) return 4; // ScalarWrapper
+            if (value instanceof Float32Array || value instanceof Int32Array || value instanceof Uint32Array) {
+                return value.byteLength;
+            }
+        }
+        return 4; // Default
+    }
+
+    /**
      * Pack a struct object into an ArrayBuffer following WGSL alignment rules
-     * WGSL uniform buffer alignment:
-     * - f32/i32/u32: 4-byte alignment
-     * - struct: 16-byte alignment (minimum)
      */
     private packStructData(obj: any): ArrayBuffer {
-        const size = this.getStructSize(obj);
-        const buffer = new ArrayBuffer(size);
+        const totalSize = this.getStructSize(obj);
+        const buffer = new ArrayBuffer(totalSize);
         const view = new DataView(buffer);
+        const uint8View = new Uint8Array(buffer);
 
         let offset = 0;
         for (const key in obj) {
             if (obj.hasOwnProperty(key)) {
                 const value = obj[key];
+                const align = this.getAlignment(value);
+                const size = this.getSize(value);
 
-                // Handle ScalarWrapper
-                if (typeof value === 'object' && value !== null && 'type' in value && 'value' in value) {
-                    const actualValue = value.value;
-                    const type = value.type;
+                // Padding for alignment
+                const padding = (align - (offset % align)) % align;
+                offset += padding;
 
-                    if (type === 'u32') {
-                        view.setUint32(offset, actualValue, true);
-                    } else if (type === 'i32') {
-                        view.setInt32(offset, actualValue, true);
-                    } else {
-                        view.setFloat32(offset, actualValue, true);
-                    }
-                    offset += 4;
-                } else if (typeof value === 'number') {
-                    // Default to f32 for plain numbers
+                if (typeof value === 'number') {
                     view.setFloat32(offset, value, true);
-                    offset += 4;
+                } else if (value && typeof value === 'object') {
+                    if ('type' in value && 'value' in value) {
+                        const v = value.value;
+                        if (value.type === 'u32') view.setUint32(offset, v, true);
+                        else if (value.type === 'i32') view.setInt32(offset, v, true);
+                        else view.setFloat32(offset, v, true);
+                    } else if (value instanceof Float32Array || value instanceof Int32Array || value instanceof Uint32Array) {
+                        // Copy array data
+                        const srcBytes = new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+                        uint8View.set(srcBytes, offset);
+                    }
                 }
+
+                offset += size;
             }
         }
 
@@ -869,17 +904,23 @@ fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
 
     /**
      * Calculate the size of a struct with proper alignment
-     * Minimum struct size is 16 bytes for uniform buffers
      */
     private getStructSize(obj: any): number {
-        let size = 0;
+        let offset = 0;
         for (const key in obj) {
             if (obj.hasOwnProperty(key)) {
-                size += 4; // All scalar types are 4 bytes
+                const value = obj[key];
+                const align = this.getAlignment(value);
+                const size = this.getSize(value);
+
+                // Padding for alignment
+                const padding = (align - (offset % align)) % align;
+                offset += padding;
+                offset += size;
             }
         }
         // Round up to multiple of 16 bytes (WGSL uniform buffer requirement)
-        return Math.max(16, Math.ceil(size / 16) * 16);
+        return Math.max(16, Math.ceil(offset / 16) * 16);
     }
 
     async dispatch(wgsl: string, entryPoint: string, args: any[], workgroupCount: [number, number, number] = [1, 1, 1]) {
