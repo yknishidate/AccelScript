@@ -750,6 +750,42 @@ describe('WGSL Generator', () => {
         `);
         expect(() => generateDeviceFunction(func)).toThrow("must have explicit type");
     });
+    it('should generate struct definition for struct used in device function', () => {
+        const code = `
+            interface HitResult {
+                t: f32;
+            }
+
+            /** @device */
+            function intersect(ro: vec3): HitResult {
+                return { t: 1.0 };
+            }
+
+            /** @kernel */
+            function compute() {
+                const res = intersect(vec3(0.0));
+            }
+        `;
+        const sourceFile = project.createSourceFile('test_struct_device.ts', code, { overwrite: true });
+        const func = sourceFile.getFunction('compute')!;
+        const result = generateWGSL(func);
+
+        expect(result).toContain('struct HitResult {');
+        expect(result).toContain('t : f32');
+    });
+    it('should initialize struct variable with struct constructor', () => {
+        const func = getFunction(`
+            interface MyStruct {
+                val: f32;
+            }
+
+            /** @kernel */
+            function testStructInit() {
+                let s: MyStruct;
+            }
+        `);
+        const result = generateWGSL(func);
+        expect(result).not.toContain('= 0.0;');
+        expect(result).toContain('var s: MyStruct;');
+    });
 });
-
-

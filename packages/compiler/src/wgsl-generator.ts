@@ -80,6 +80,29 @@ function generateStructDefinitions(func: FunctionDeclaration): string {
         }
     });
 
+    // Scan device functions for struct usage
+    const deviceFuncs = sourceFile.getFunctions().filter(f =>
+        f.getJsDocs().some(doc => doc.getTags().some(tag => tag.getTagName() === "device"))
+    );
+
+    deviceFuncs.forEach(df => {
+        // Scan parameters
+        df.getParameters().forEach(p => {
+            const typeNode = p.getTypeNode();
+            const typeText = typeNode ? typeNode.getText() : p.getType().getText();
+            if (isStructType(typeText)) {
+                structTypes.add(typeText);
+            }
+        });
+
+        // Scan return type
+        const returnTypeNode = df.getReturnTypeNode();
+        const returnTypeText = returnTypeNode ? returnTypeNode.getText() : df.getReturnType().getText();
+        if (isStructType(returnTypeText)) {
+            structTypes.add(returnTypeText);
+        }
+    });
+
     let structDefs = "";
     for (const structName of structTypes) {
         const structDef = generateStructDefinition(sourceFile, structName);
@@ -323,9 +346,10 @@ function transpileNode(node: Node): string {
         const name = decl.getName();
         const init = decl.getInitializer();
         const typeNode = decl.getTypeNode();
-        const typeAnnotation = typeNode ? `: ${typeNode.getText()}` : '';
+        const typeAnnotation = typeNode ? `: ${mapType(typeNode.getText())}` : '';
         const wgslKeyword = isConst ? "let" : "var";
-        return `    ${wgslKeyword} ${name}${typeAnnotation} = ${init ? transpileNode(init) : "0.0"};`;
+        const initializer = init ? ` = ${transpileNode(init)}` : "";
+        return `    ${wgslKeyword} ${name}${typeAnnotation}${initializer};`;
     }
 
     // Expression statements (e.g., function calls, assignments)

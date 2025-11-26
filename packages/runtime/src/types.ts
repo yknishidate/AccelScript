@@ -65,6 +65,7 @@ declare global {
     var global_id: vec3u;
     var vertex_index: u32;
     var instance_index: u32;
+    var frag_coord: vec4f;
 
     // ========================================================================
     // Input
