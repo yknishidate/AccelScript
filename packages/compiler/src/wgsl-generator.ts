@@ -163,6 +163,13 @@ function mapType(tsType: string): string {
         return `array<${mapType(innerType)}>`;
     }
 
+    // Atomic types
+    const atomicMatch = tsType.match(/^Atomic<(.+)>$/);
+    if (atomicMatch) {
+        const innerType = atomicMatch[1];
+        return `atomic<${mapType(innerType)}>`;
+    }
+
     // Primitive types
     if (tsType === "number") return "f32";
     if (tsType === "boolean") return "bool";
@@ -407,8 +414,15 @@ function transpileNode(node: Node): string {
     // Function calls (e.g., sqrt(x), vec4(1.0, 0.0, 0.0, 1.0))
     if (Node.isCallExpression(node)) {
         const expr = node.getExpression();
-        const args = node.getArguments().map(a => transpileNode(a)).join(", ");
-        return `${transpileNode(expr)}(${args})`;
+        const args = node.getArguments().map(a => transpileNode(a));
+
+        // Special handling for atomic functions: first argument must be a pointer
+        const funcName = expr.getText();
+        if (funcName.startsWith("atomic") && args.length > 0) {
+            args[0] = `&${args[0]}`;
+        }
+
+        return `${transpileNode(expr)}(${args.join(", ")})`;
     }
 
     // Array element access (e.g., arr[i])

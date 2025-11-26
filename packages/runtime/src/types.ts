@@ -182,6 +182,23 @@ declare global {
     function frexp(v: number): { x: number, y: number };
     function ldexp(v: number, w: number): number;
     function quantizeToF16(v: number): number;
+
+    // ========================================================================
+    // Atomics
+    // ========================================================================
+    type Atomic<T> = T;
+
+    function atomicLoad(ptr: Atomic<u32> | Atomic<i32>): u32 | i32;
+    function atomicStore(ptr: Atomic<u32> | Atomic<i32>, value: u32 | i32): void;
+    function atomicAdd(ptr: Atomic<u32> | Atomic<i32>, value: u32 | i32): u32 | i32;
+    function atomicSub(ptr: Atomic<u32> | Atomic<i32>, value: u32 | i32): u32 | i32;
+    function atomicMax(ptr: Atomic<u32> | Atomic<i32>, value: u32 | i32): u32 | i32;
+    function atomicMin(ptr: Atomic<u32> | Atomic<i32>, value: u32 | i32): u32 | i32;
+    function atomicAnd(ptr: Atomic<u32> | Atomic<i32>, value: u32 | i32): u32 | i32;
+    function atomicOr(ptr: Atomic<u32> | Atomic<i32>, value: u32 | i32): u32 | i32;
+    function atomicXor(ptr: Atomic<u32> | Atomic<i32>, value: u32 | i32): u32 | i32;
+    function atomicExchange(ptr: Atomic<u32> | Atomic<i32>, value: u32 | i32): u32 | i32;
+    function atomicCompareExchangeWeak(ptr: Atomic<u32> | Atomic<i32>, compare: u32 | i32, value: u32 | i32): { old_value: u32 | i32, exchanged: boolean };
 }
 
 export interface ScalarWrapper {
