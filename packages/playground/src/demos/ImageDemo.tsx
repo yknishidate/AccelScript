@@ -42,8 +42,8 @@ export default function ImageDemo() {
         let animating = true;
 
         const init = async () => {
-            const width = 640;
-            const height = 480;
+            const width = 800;
+            const height = 600;
 
             const params = {
                 time: 0.0,
@@ -63,9 +63,9 @@ export default function ImageDemo() {
                 params.time = (performance.now() - startTime) / 1000.0;
 
                 // Dispatch kernel
-                // 640 / 8 = 80, 480 / 8 = 60
+                // 800 / 8 = 100, 600 / 8 = 75
                 // @ts-ignore
-                await generateImage<[80, 60, 1]>(image, params);
+                await generateImage<[100, 75, 1]>(image, params);
 
                 // Display image
                 // @ts-ignore
