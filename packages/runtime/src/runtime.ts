@@ -3,6 +3,8 @@ import { CircleRenderer } from './renderer/circle-renderer';
 import { LineRenderer } from './renderer/line-renderer';
 import { ImageRenderer } from './renderer/image-renderer';
 import { RectangleRenderer } from './renderer/rectangle-renderer';
+import { SphereRenderer } from './renderer/sphere-renderer';
+import { Camera } from './camera';
 
 export class Runtime {
     device: GPUDevice | null = null;
@@ -432,6 +434,7 @@ export class Runtime {
     private lineRenderer: LineRenderer | null = null;
     private imageRenderer: ImageRenderer | null = null;
     private rectangleRenderer: RectangleRenderer | null = null;
+    private sphereRenderer: SphereRenderer | null = null;
 
     async circle(center: [number, number], radius: number, color: [number, number, number, number], options: { aspect?: number } = {}) {
         const c = new SharedArray(2); c.data.set(center);
@@ -511,6 +514,34 @@ export class Runtime {
         }
 
         await this.rectangleRenderer.draw(this.context, centers, sizes, colors, options);
+    }
+
+    async sphere(
+        center: [number, number, number],
+        radius: number,
+        color: [number, number, number, number] | [number, number, number],
+        options: { aspect?: number, camera?: Camera } = {}
+    ) {
+        const c = new SharedArray(3); c.data.set(center);
+        const r = new SharedArray(1); r.data[0] = radius;
+        const col = new SharedArray(color.length); col.data.set(color);
+        return this.spheres(c, r, col, options);
+    }
+
+    async spheres(
+        centers: SharedArray,
+        radii: SharedArray,
+        colors: SharedArray,
+        options: { aspect?: number, camera?: Camera } = {}
+    ) {
+        if (!this.context) throw new Error("Canvas not setup");
+        await this.init();
+
+        if (!this.sphereRenderer) {
+            this.sphereRenderer = new SphereRenderer(this.device!, this.presentationFormat);
+        }
+
+        await this.sphereRenderer.draw(this.context, centers, radii, colors, options);
     }
 
     // Display a 2D SharedArray as an image on the canvas

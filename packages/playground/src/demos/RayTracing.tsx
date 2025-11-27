@@ -167,6 +167,7 @@ async function compute(image: SharedArray<vec4f>, params: Params) {
         let scatterDir = vec3(0.0, 0.0, 0.0);
         if (hitResult.matType == 0.0) { // Diffuse
             scatterDir = hitResult.normal + randomInUnitSphere(seed + vec2(f32(i), f32(i)));
+            // @ts-ignore
             if (length(scatterDir) < 0.001) scatterDir = hitResult.normal;
         } else if (hitResult.matType == 1.0) { // Metal
             let reflected = reflect(curRd, hitResult.normal);
