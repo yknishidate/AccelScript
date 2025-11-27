@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { runtime, SharedArray, vec4f, f32 } from "@accelscript/runtime";
+import { runtime, SharedArray, vec4f, f32, Camera } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
 
 interface Params {
@@ -206,47 +206,15 @@ export default function RayTracing() {
         let animating = true;
         let frameCount = 1;
 
-        // Camera state
-        let azimuth = -1.57; // Looking at -Z
-        let elevation = 0.0;
-        let distance = 5.0;
-        let isDragging = false;
-        let lastMouseX = 0;
-        let lastMouseY = 0;
-
+        const camera = new Camera();
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        if (canvas) {
+            camera.attach(canvas);
+        }
 
-        const handleMouseDown = (e: MouseEvent) => {
-            isDragging = true;
-            lastMouseX = e.clientX;
-            lastMouseY = e.clientY;
-        };
-
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!isDragging) return;
-            const deltaX = e.clientX - lastMouseX;
-            const deltaY = e.clientY - lastMouseY;
-            lastMouseX = e.clientX;
-            lastMouseY = e.clientY;
-
-            azimuth -= deltaX * 0.01;
-            elevation += deltaY * 0.01;
-
-            // Clamp elevation to avoid flipping
-            elevation = Math.max(-1.5, Math.min(1.5, elevation));
-
-            // Reset accumulation
+        camera.onChange(() => {
             frameCount = 1;
-        };
-
-        const handleMouseUp = () => {
-            isDragging = false;
-        };
-
-        canvas.addEventListener('mousedown', handleMouseDown);
-        window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
+        });
 
         const init = async () => {
             const width = 800;
@@ -266,14 +234,8 @@ export default function RayTracing() {
             const render = async () => {
                 if (!animating) return;
 
-                // Update camera
-                const camX = distance * Math.cos(elevation) * Math.cos(azimuth);
-                const camY = distance * Math.sin(elevation);
-                const camZ = distance * Math.cos(elevation) * Math.sin(azimuth);
-
-                params.cameraPos = vec4f(camX, camY, camZ, 0);
-                params.cameraDir = vec4f(-camX, -camY, -camZ, 0); // Look at origin
-
+                params.cameraPos = camera.pos;
+                params.cameraDir = camera.dir;
                 params.frame = u32(frameCount);
 
                 // Dispatch kernel
@@ -295,9 +257,7 @@ export default function RayTracing() {
 
         return () => {
             animating = false;
-            canvas.removeEventListener('mousedown', handleMouseDown);
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            camera.detach();
         };
     }, [isReady]);
 
