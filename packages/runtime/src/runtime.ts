@@ -2,6 +2,7 @@ import { SharedArray } from './shared-array';
 import { CircleRenderer } from './renderer/circle-renderer';
 import { LineRenderer } from './renderer/line-renderer';
 import { ImageRenderer } from './renderer/image-renderer';
+import { RectangleRenderer } from './renderer/rectangle-renderer';
 
 export class Runtime {
     device: GPUDevice | null = null;
@@ -425,10 +426,12 @@ export class Runtime {
             buffer.destroy();
         }
     }
+
     // Primitive rendering infrastructure
     private circleRenderer: CircleRenderer | null = null;
     private lineRenderer: LineRenderer | null = null;
     private imageRenderer: ImageRenderer | null = null;
+    private rectangleRenderer: RectangleRenderer | null = null;
 
     async circle(center: [number, number], radius: number, color: [number, number, number, number], options: { aspect?: number } = {}) {
         const c = new SharedArray(2); c.data.set(center);
@@ -480,6 +483,34 @@ export class Runtime {
         }
 
         await this.lineRenderer.draw(this.context, begin, end, width, color, options);
+    }
+
+    async rect(
+        center: [number, number],
+        size: [number, number],
+        color: [number, number, number, number],
+        options: { aspect?: number } = {}
+    ) {
+        const c = new SharedArray(2); c.data.set(center);
+        const s = new SharedArray(2); s.data.set(size);
+        const col = new SharedArray(4); col.data.set(color);
+        return this.rects(c, s, col, options);
+    }
+
+    async rects(
+        centers: SharedArray,
+        sizes: SharedArray,
+        colors: SharedArray,
+        options: { aspect?: number } = {}
+    ) {
+        if (!this.context) throw new Error("Canvas not setup");
+        await this.init();
+
+        if (!this.rectangleRenderer) {
+            this.rectangleRenderer = new RectangleRenderer(this.device!, this.presentationFormat);
+        }
+
+        await this.rectangleRenderer.draw(this.context, centers, sizes, colors, options);
     }
 
     // Display a 2D SharedArray as an image on the canvas

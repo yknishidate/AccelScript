@@ -34,6 +34,47 @@ program.parse();
  * @param outFile Optional path to the output file
  */
 function compile(filePath: string, outFile?: string) {
+    const absPath = path.resolve(filePath);
+    if (!fs.existsSync(absPath)) {
+        throw new Error(`Input path not found: ${absPath}`);
+    }
+
+    const stats = fs.statSync(absPath);
+    if (stats.isDirectory()) {
+        if (outFile) {
+            console.warn("Warning: --out option is ignored when input is a directory.");
+        }
+
+        const files = fs.readdirSync(absPath);
+        for (const file of files) {
+            // Process .ts and .tsx files, excluding .gen.ts(x) and .d.ts
+            if ((file.endsWith('.ts') || file.endsWith('.tsx')) &&
+                !file.endsWith('.gen.ts') &&
+                !file.endsWith('.gen.tsx') &&
+                !file.endsWith('.d.ts')) {
+
+                const fullPath = path.join(absPath, file);
+                // Generate output filename: Name.tsx -> Name.gen.tsx
+                const outPath = fullPath.replace(/\.tsx?$/, '.gen.tsx');
+
+                try {
+                    compileFile(fullPath, outPath);
+                } catch (e) {
+                    console.error(`Failed to compile ${file}:`, e);
+                }
+            }
+        }
+    } else {
+        compileFile(absPath, outFile);
+    }
+}
+
+/**
+ * Compile a single AccelScript source file
+ * @param filePath Path to the input file
+ * @param outFile Optional path to the output file
+ */
+function compileFile(filePath: string, outFile?: string) {
     // Validate input file exists
     const absPath = path.resolve(filePath);
     if (!fs.existsSync(absPath)) {

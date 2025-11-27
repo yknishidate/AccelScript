@@ -8,16 +8,19 @@ import ImageDemo from './demos/ImageDemo.gen'
 import MouseDemo from './demos/MouseDemo.gen'
 import RayTracing from './demos/RayTracing.gen'
 
+import Rectangles from './demos/Rectangles.gen'
+
 import './index.css'
 
 function Layout() {
-    const [demo, setDemo] = useState<"vector" | "triangle" | "circles" | "lines" | "image" | "mouse" | "raytracing">("raytracing");
+    const [demo, setDemo] = useState<"vector" | "triangle" | "circles" | "lines" | "image" | "mouse" | "raytracing" | "rectangles">("rectangles");
 
     const demos = [
         { id: "mouse", label: "Mouse", description: "Mouse interaction demo" },
         { id: "vector", label: "Vector Compute", description: "Basic vector operations on GPU" },
         { id: "triangle", label: "Triangle", description: "Basic graphics rendering" },
         { id: "circles", label: "Circles", description: "Interactive particle system" },
+        { id: "rectangles", label: "Rectangles", description: "Rectangle drawing demo" },
         { id: "lines", label: "Lines", description: "Line drawing demo" },
         { id: "image", label: "Image Processing", description: "Image manipulation filters" },
         { id: "raytracing", label: "Ray Tracing", description: "Simple sphere ray tracing" },
@@ -37,7 +40,7 @@ function Layout() {
                     {demos.map((d) => (
                         <button
                             key={d.id}
-                            onClick={() => setDemo(d.id)}
+                            onClick={() => setDemo(d.id as any)}
                             className={`nav-button ${demo === d.id ? 'active' : ''}`}
                         >
                             {d.label}
@@ -55,6 +58,7 @@ function Layout() {
                     {demo === "vector" && <VectorCompute />}
                     {demo === "triangle" && <Triangle />}
                     {demo === "circles" && <Circles />}
+                    {demo === "rectangles" && <Rectangles />}
                     {demo === "lines" && <Lines />}
                     {demo === "image" && <ImageDemo />}
                     {demo === "mouse" && <MouseDemo />}
