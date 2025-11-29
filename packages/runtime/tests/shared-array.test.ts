@@ -71,20 +71,20 @@ describe('SharedArray', () => {
 
         // Assign using TypedArray
         const v1 = new Float32Array([1.0, 2.0, 3.0]);
-        arr[0] = v1;
+        arr.set(0, v1);
 
         expect(arr.data[0]).toBe(1.0);
         expect(arr.data[1]).toBe(2.0);
         expect(arr.data[2]).toBe(3.0);
 
         // Assign using Array
-        arr[1] = [4.0, 5.0, 6.0];
+        arr.set(1, [4.0, 5.0, 6.0]);
         expect(arr.data[3]).toBe(4.0);
         expect(arr.data[4]).toBe(5.0);
         expect(arr.data[5]).toBe(6.0);
 
         // Assign using vec3f() constructor
-        arr[0] = vec3f(7.0, 8.0, 9.0);
+        arr.set(0, vec3f(7.0, 8.0, 9.0));
         expect(arr.data[0]).toBe(7.0);
         expect(arr.data[1]).toBe(8.0);
         expect(arr.data[2]).toBe(9.0);
@@ -97,13 +97,13 @@ describe('SharedArray', () => {
         arr.data[2] = 30.0;
         arr.data[3] = 40.0;
 
-        const v0 = arr[0];
+        const v0 = arr.get(0);
         expect(v0).toBeInstanceOf(Float32Array);
         expect(v0.length).toBe(2);
         expect(v0[0]).toBe(10.0);
         expect(v0[1]).toBe(20.0);
 
-        const v1 = arr[1];
+        const v1 = arr.get(1);
         expect(v1[0]).toBe(30.0);
         expect(v1[1]).toBe(40.0);
 
