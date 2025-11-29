@@ -1,6 +1,7 @@
 import { SharedArray } from '../shared-array';
 import { Camera } from '../camera';
 import { lookAt, perspective } from '../math';
+import { vec3f } from '../types';
 
 export enum PrimitiveType {
     Sphere = 0,
@@ -475,13 +476,13 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         if (options.camera) {
             const cam = options.camera;
             viewMatrix = lookAt(
-                [cam.pos[0], cam.pos[1], cam.pos[2]],
-                [cam.center[0], cam.center[1], cam.center[2]],
-                [0, 1, 0]
+                cam.pos,
+                cam.center,
+                cam.up
             );
             projectionMatrix = perspective(Math.PI / 4, aspect, 0.1, 100.0);
         } else {
-            viewMatrix = lookAt([0, 0, 2], [0, 0, 0], [0, 1, 0]);
+            viewMatrix = lookAt(vec3f(0, 0, 2), vec3f(0, 0, 0), vec3f(0, 1, 0));
             projectionMatrix = perspective(Math.PI / 4, aspect, 0.1, 100.0);
         }
 

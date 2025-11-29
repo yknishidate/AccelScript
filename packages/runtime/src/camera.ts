@@ -1,15 +1,16 @@
 import { add, sub, mul, normalize, cross } from './math';
+import { vec3f } from './types';
 
 export class Camera {
     azimuth = 0;
     elevation = 0.0;
     distance = 5.0;
-    center = new Float32Array([0, 0, 0]);
+    center: vec3f = vec3f(0, 0, 0);
 
-    pos: Float32Array = new Float32Array([0, 0, 0]);
-    dir: Float32Array = new Float32Array([0, 0, 0]);
-    up: Float32Array = new Float32Array([0, 1, 0]);
-    right: Float32Array = new Float32Array([1, 0, 0]);
+    pos: vec3f = vec3f(0, 0, 0);
+    dir: vec3f = vec3f(0, 0, 0);
+    up: vec3f = vec3f(0, 1, 0);
+    right: vec3f = vec3f(1, 0, 0);
 
     private isDragging = false;
     private lastMouseX = 0;
@@ -72,14 +73,14 @@ export class Camera {
         const z = this.distance * Math.cos(this.elevation) * Math.cos(this.azimuth);
 
         // Position relative to center
-        const offset = new Float32Array([x, y, z]);
+        const offset = vec3f(x, y, z);
         this.pos = add(this.center, offset);
 
         // Direction (looking at center)
         this.dir = normalize(sub(this.center, this.pos));
 
         // Right vector
-        const worldUp = new Float32Array([0, 1, 0]);
+        const worldUp = vec3f(0, 1, 0);
         this.right = normalize(cross(this.dir, worldUp));
 
         // Up vector

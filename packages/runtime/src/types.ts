@@ -282,3 +282,19 @@ g.mat4x4f = mat4x4f;
 g.mat2x2 = mat2x2f;
 g.mat3x3 = mat3x3f;
 g.mat4x4 = mat4x4f;
+
+export type vec2f = Float32Array;
+export type vec3f = Float32Array;
+export type vec4f = Float32Array;
+export type vec2u = Uint32Array;
+export type vec3u = Uint32Array;
+export type vec4u = Uint32Array;
+export type vec2i = Int32Array;
+export type vec3i = Int32Array;
+export type vec4i = Int32Array;
+export type mat4x4f = Float32Array;
+
+export type vec2 = vec2f;
+export type vec3 = vec3f;
+export type vec4 = vec4f;
+export type mat4 = mat4x4f;

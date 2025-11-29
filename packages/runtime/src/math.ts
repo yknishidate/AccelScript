@@ -1,6 +1,6 @@
-import { mat4x4f } from './types';
+import { mat4x4f, vec3f, vec4f } from './types';
 
-export function lookAt(eye: [number, number, number], center: [number, number, number], up: [number, number, number]): Float32Array {
+export function lookAt(eye: vec3f, center: vec3f, up: vec3f): mat4x4f {
     const z0 = eye[0] - center[0];
     const z1 = eye[1] - center[1];
     const z2 = eye[2] - center[2];
@@ -37,7 +37,7 @@ export function lookAt(eye: [number, number, number], center: [number, number, n
     ]);
 }
 
-export function perspective(fovy: number, aspect: number, near: number, far: number): Float32Array {
+export function perspective(fovy: number, aspect: number, near: number, far: number): mat4x4f {
     const f = 1.0 / Math.tan(fovy / 2);
     const nf = 1 / (near - far);
     return new Float32Array([
@@ -49,35 +49,34 @@ export function perspective(fovy: number, aspect: number, near: number, far: num
 }
 
 // Vector Math
-type Vec3 = [number, number, number] | Float32Array;
 
-export function add(a: Vec3, b: Vec3): Float32Array {
+export function add(a: vec3f, b: vec3f): vec3f {
     return new Float32Array([a[0] + b[0], a[1] + b[1], a[2] + b[2]]);
 }
 
-export function sub(a: Vec3, b: Vec3): Float32Array {
+export function sub(a: vec3f, b: vec3f): vec3f {
     return new Float32Array([a[0] - b[0], a[1] - b[1], a[2] - b[2]]);
 }
 
-export function mul(a: Vec3, s: number): Float32Array {
+export function mul(a: vec3f, s: number): vec3f {
     return new Float32Array([a[0] * s, a[1] * s, a[2] * s]);
 }
 
-export function div(a: Vec3, s: number): Float32Array {
+export function div(a: vec3f, s: number): vec3f {
     return new Float32Array([a[0] / s, a[1] / s, a[2] / s]);
 }
 
-export function len(v: Vec3): number {
+export function len(v: vec3f): number {
     return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 }
 
-export function normalize(v: Vec3): Float32Array {
+export function normalize(v: vec3f): vec3f {
     const l = len(v);
     if (l === 0) return new Float32Array([0, 0, 0]);
     return div(v, l);
 }
 
-export function cross(a: Vec3, b: Vec3): Float32Array {
+export function cross(a: vec3f, b: vec3f): vec3f {
     return new Float32Array([
         a[1] * b[2] - a[2] * b[1],
         a[2] * b[0] - a[0] * b[2],
@@ -85,6 +84,6 @@ export function cross(a: Vec3, b: Vec3): Float32Array {
     ]);
 }
 
-export function dot(a: Vec3, b: Vec3): number {
+export function dot(a: vec3f, b: vec3f): number {
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }

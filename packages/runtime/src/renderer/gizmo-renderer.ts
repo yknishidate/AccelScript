@@ -163,9 +163,9 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         ];
 
         const viewMatrix = lookAt(
-            [camPos[0], camPos[1], camPos[2]],
-            [0, 0, 0],
-            [0, 1, 0]
+            vec3f(camPos[0], camPos[1], camPos[2]),
+            vec3f(0, 0, 0),
+            vec3f(0, 1, 0)
         );
         const projectionMatrix = perspective(Math.PI / 4, 1, 0.1, 100.0);
 
