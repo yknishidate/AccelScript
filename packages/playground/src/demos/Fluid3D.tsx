@@ -215,17 +215,14 @@ export default function Fluid3D() {
                 const y = (Math.floor(i / particlesPerSide) % particlesPerSide) * spacing + offset;
                 const z = (Math.floor(i / (particlesPerSide * particlesPerSide))) * spacing + offset;
 
-                pos.data[i * 3 + 0] = x + (Math.random() - 0.5) * 0.01;
-                pos.data[i * 3 + 1] = y + (Math.random() - 0.5) * 0.01;
-                pos.data[i * 3 + 2] = z + (Math.random() - 0.5) * 0.01;
+                pos.set(i, [
+                    x + (Math.random() - 0.5) * 0.01,
+                    y + (Math.random() - 0.5) * 0.01,
+                    z + (Math.random() - 0.5) * 0.01
+                ]);
 
-                sizes.data[i * 3 + 0] = 0.05;
-                sizes.data[i * 3 + 1] = 0.05;
-                sizes.data[i * 3 + 2] = 0.05;
-
-                colors.data[i * 3 + 0] = 0.2;
-                colors.data[i * 3 + 1] = 0.5;
-                colors.data[i * 3 + 2] = 1.0;
+                sizes.set(i, [0.05, 0.05, 0.05]);
+                colors.set(i, [0.2, 0.5, 1.0]);
             }
 
             let frameCount = 0;

@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { runtime, SharedArray, vec2f, f32 } from "@accelscript/runtime";
+import { runtime, SharedArray, vec2f, vec4f, f32 } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
 
 /** @kernel */
@@ -42,22 +42,16 @@ export default function Rectangles() {
             const centers = new SharedArray(vec2f, numRects);
             const velocities = new SharedArray(vec2f, numRects);
             const sizes = new SharedArray(vec2f, numRects);
-            const colors = new SharedArray(f32, numRects * 4);
+            const colors = new SharedArray(vec4f, numRects);
 
             for (let i = 0; i < numRects; i++) {
-                centers.data[i * 2 + 0] = Math.random() * 2 - 1;
-                centers.data[i * 2 + 1] = Math.random() * 2 - 1;
-                velocities.data[i * 2 + 0] = (Math.random() - 0.5) * 2;
-                velocities.data[i * 2 + 1] = (Math.random() - 0.5) * 2;
+                centers.set(i, [Math.random() * 2 - 1, Math.random() * 2 - 1]);
+                velocities.set(i, [(Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2]);
 
                 // Random width and height
-                sizes.data[i * 2 + 0] = Math.random() * 0.1 + 0.05;
-                sizes.data[i * 2 + 1] = Math.random() * 0.1 + 0.05;
+                sizes.set(i, [Math.random() * 0.1 + 0.05, Math.random() * 0.1 + 0.05]);
 
-                colors.data[i * 4 + 0] = Math.random();
-                colors.data[i * 4 + 1] = Math.random();
-                colors.data[i * 4 + 2] = Math.random();
-                colors.data[i * 4 + 3] = 0.8;
+                colors.set(i, [Math.random(), Math.random(), Math.random(), 0.8]);
             }
 
             // Animation loop

@@ -24,29 +24,29 @@ export function PrimitiveDemo() {
             const wallColors = new SharedArray(vec3f, 5);
 
             // 0: Floor (White)
-            wallCenters.data.set([0, -5.1, 0], 0);
-            wallSizes.data.set([5, 0.1, 5], 0); // Half-extents
-            wallColors.data.set([1, 1, 1], 0);
+            wallCenters.set(0, [0, -5.1, 0]);
+            wallSizes.set(0, [5, 0.1, 5]); // Half-extents
+            wallColors.set(0, [1, 1, 1]);
 
             // 1: Ceiling (White)
-            wallCenters.data.set([0, 5.1, 0], 3);
-            wallSizes.data.set([5, 0.1, 5], 3);
-            wallColors.data.set([1, 1, 1], 3);
+            wallCenters.set(1, [0, 5.1, 0]);
+            wallSizes.set(1, [5, 0.1, 5]);
+            wallColors.set(1, [1, 1, 1]);
 
             // 2: Back Wall (White)
-            wallCenters.data.set([0, 0, -5.1], 6);
-            wallSizes.data.set([5, 5, 0.1], 6);
-            wallColors.data.set([1, 1, 1], 6);
+            wallCenters.set(2, [0, 0, -5.1]);
+            wallSizes.set(2, [5, 5, 0.1]);
+            wallColors.set(2, [1, 1, 1]);
 
             // 3: Left Wall (Red)
-            wallCenters.data.set([-5.1, 0, 0], 9);
-            wallSizes.data.set([0.1, 5, 5], 9);
-            wallColors.data.set([1, 0, 0], 9);
+            wallCenters.set(3, [-5.1, 0, 0]);
+            wallSizes.set(3, [0.1, 5, 5]);
+            wallColors.set(3, [1, 0, 0]);
 
             // 4: Right Wall (Green)
-            wallCenters.data.set([5.1, 0, 0], 12);
-            wallSizes.data.set([0.1, 5, 5], 12);
-            wallColors.data.set([0, 1, 0], 12);
+            wallCenters.set(4, [5.1, 0, 0]);
+            wallSizes.set(4, [0.1, 5, 5]);
+            wallColors.set(4, [0, 1, 0]);
 
             // Objects
             // Tall Box (White-ish) - Rotated in real Cornell box, but axis aligned here
@@ -55,32 +55,32 @@ export function PrimitiveDemo() {
             const boxColors = new SharedArray(vec3f, 2);
 
             // Tall Box
-            boxCenters.data.set([-2, -2, -2], 0);
-            boxSizes.data.set([1.5, 3, 1.5], 0);
-            boxColors.data.set([0.9, 0.9, 0.9], 0);
+            boxCenters.set(0, [-2, -2, -2]);
+            boxSizes.set(0, [1.5, 3, 1.5]);
+            boxColors.set(0, [0.9, 0.9, 0.9]);
 
             // Short Box
-            boxCenters.data.set([2, -3.5, 2], 3);
-            boxSizes.data.set([1.5, 1.5, 1.5], 3);
-            boxColors.data.set([0.9, 0.9, 0.9], 3);
+            boxCenters.set(1, [2, -3.5, 2]);
+            boxSizes.set(1, [1.5, 1.5, 1.5]);
+            boxColors.set(1, [0.9, 0.9, 0.9]);
 
             // Sphere
             const sphereCenters = new SharedArray(vec3f, 1);
             const sphereSizes = new SharedArray(vec3f, 1);
             const sphereColors = new SharedArray(vec3f, 1);
 
-            sphereCenters.data.set([0, -3.5, 0], 0);
-            sphereSizes.data.set([1.5, 1.5, 1.5], 0); // Radius 1.5
-            sphereColors.data.set([1, 1, 1], 0); // White sphere (glass/mirror in real one usually)
+            sphereCenters.set(0, [0, -3.5, 0]);
+            sphereSizes.set(0, [1.5, 1.5, 1.5]); // Radius 1.5
+            sphereColors.set(0, [1, 1, 1]); // White sphere (glass/mirror in real one usually)
 
             // Light (Box on ceiling)
             const lightCenter = new SharedArray(vec3f, 1);
             const lightSize = new SharedArray(vec3f, 1);
             const lightColor = new SharedArray(vec3f, 1);
 
-            lightCenter.data.set([0, 4.9, 0], 0);
-            lightSize.data.set([1, 0.1, 1], 0);
-            lightColor.data.set([1, 1, 1], 0);
+            lightCenter.set(0, [0, 4.9, 0]);
+            lightSize.set(0, [1, 0.1, 1]);
+            lightColor.set(0, [1, 1, 1]);
 
             const camera = new Camera();
             camera.distance = 18;
