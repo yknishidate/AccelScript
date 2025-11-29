@@ -5,13 +5,12 @@ import { useUniforms, UniformControls } from '../hooks/useUniforms';
 
 const uniformsSchema = {
     smoothingRadius: { value: 0.2, min: 0.05, max: 0.5, step: 0.01 },
-    restDensity: { value: 100.0, min: 10.0, max: 2000.0, step: 10.0 },
-    gasConstant: { value: 200.0, min: 10.0, max: 5000.0, step: 10.0 },
-    viscosity: { value: 0.1, min: 0.0, max: 10.0, step: 0.01 },
-    mass: { value: 0.5, min: 0.1, max: 10.0, step: 0.1 },
+    restDensity: { value: 100.0, min: 10.0, max: 200.0, step: 10.0 },
+    gasConstant: { value: 100.0, min: 10.0, max: 500.0, step: 10.0 },
+    viscosity: { value: 3.0, min: 0.0, max: 10.0, step: 0.1 },
+    mass: { value: 0.5, min: 0.1, max: 5.0, step: 0.1 },
     dt: { value: 0.01, min: 0.001, max: 0.1, step: 0.001 },
-    boundaryLimit: { value: 1.5, min: 0.5, max: 5.0, step: 0.1 },
-    gravity: { value: -9.8, min: -20.0, max: 20.0, step: 0.1 }
+    boundaryLimit: { value: 3.0, min: 0.5, max: 5.0, step: 0.1 },
 };
 
 // SPH Parameters
@@ -124,7 +123,7 @@ async function computeForces(
             pressureForce = pressureForce - grad * (params.mass * (pri + prj) / (2.0 * dj));
 
             const lap = viscosityKernelLap(dist, params.smoothingRadius);
-            viscosityForce = viscosityForce + (vj - vi) * (viscosityKernelLap(dist, params.smoothingRadius) * (params.mass / dj));
+            viscosityForce = viscosityForce + (vj - vi) * (lap * (params.mass / dj));
         }
     }
 
@@ -192,53 +191,55 @@ export default function Fluid3D() {
         const canvas = canvasRef.current;
         if (canvas) {
             camera.attach(canvas);
-            camera.pos = vec3f(0, 0, 4);
+            camera.distance = 12;
+            camera.azimuth = 0.2;
+            camera.center = vec3f(-uniforms.current.boundaryLimit * 0.25, 0, 0);
+            camera.update();
         }
 
         const init = async () => {
-            const NUM_PARTICLES = 1000;
-            // Initial params from uniforms
-            const initialParams = {
-                gravity: vec4f(0.0, uniforms.current.gravity, 0.0, 0.0),
-                numParticles: u32(NUM_PARTICLES),
-                smoothingRadius: f32(uniforms.current.smoothingRadius),
-                restDensity: f32(uniforms.current.restDensity),
-                gasConstant: f32(uniforms.current.gasConstant),
-                viscosity: f32(uniforms.current.viscosity),
-                mass: f32(uniforms.current.mass),
-                dt: f32(uniforms.current.dt),
-                boundaryLimit: f32(uniforms.current.boundaryLimit)
-            };
-
+            const NUM_PARTICLES = 4096;
             const pos = new SharedArray(vec3f, NUM_PARTICLES, SyncMode.None);
             const vel = new SharedArray(vec3f, NUM_PARTICLES, SyncMode.None);
             const force = new SharedArray(vec3f, NUM_PARTICLES, SyncMode.None);
             const density = new SharedArray(f32, NUM_PARTICLES, SyncMode.None);
             const pressure = new SharedArray(f32, NUM_PARTICLES, SyncMode.None);
-
             const sizes = new SharedArray(vec3f, NUM_PARTICLES);
             const colors = new SharedArray(vec3f, NUM_PARTICLES);
 
-            // Initialize particles in a block
-            const particlesPerSide = Math.ceil(Math.pow(NUM_PARTICLES, 1 / 3));
-            const spacing = 0.15;
-            const offset = -0.5;
+            // Initialize particles in a block (Dam Break)
+            const bounds = uniforms.current.boundaryLimit;
+            const spacing = 0.2; // Fixed spacing for liquid behavior
+
+            // Start from the corner of the boundary
+            const startX = -bounds + spacing / 2;
+            const startY = -bounds + spacing / 2;
+            const startZ = -bounds + spacing / 2;
+
+            // Calculate dimensions of the dam column (Left 25% of width)
+            const damWidth = (bounds * 2) * 0.25;
+            const countX = Math.floor(damWidth / spacing);
+            const countZ = Math.floor((bounds * 2) / spacing);
 
             for (let i = 0; i < NUM_PARTICLES; i++) {
-                const x = (i % particlesPerSide) * spacing + offset;
-                const y = (Math.floor(i / particlesPerSide) % particlesPerSide) * spacing + offset;
-                const z = (Math.floor(i / (particlesPerSide * particlesPerSide))) * spacing + offset;
+                const iz = i % countZ;
+                const ix = Math.floor(i / countZ) % countX;
+                const iy = Math.floor(i / (countZ * countX));
+
+                const px = startX + ix * spacing;
+                const py = startY + iy * spacing;
+                const pz = startZ + iz * spacing;
 
                 pos.set(i, [
-                    x + (Math.random() - 0.5) * 0.01,
-                    y + (Math.random() - 0.5) * 0.01,
-                    z + (Math.random() - 0.5) * 0.01
+                    px + (Math.random() - 0.5) * 0.01,
+                    py + (Math.random() - 0.5) * 0.01,
+                    pz + (Math.random() - 0.5) * 0.01
                 ]);
 
                 vel.set(i, [0.0, 0.0, 0.0]);
                 force.set(i, [0.0, 0.0, 0.0]);
 
-                sizes.set(i, [0.05, 0.05, 0.05]);
+                sizes.set(i, [0.07, 0.07, 0.07]);
                 colors.set(i, [0.2, 0.5, 1.0]);
             }
 
@@ -270,7 +271,7 @@ export default function Fluid3D() {
 
                 // Update params from uniforms
                 const currentParams = {
-                    gravity: vec4f(0.0, uniforms.current.gravity, 0.0, 0.0),
+                    gravity: vec4f(0.0, -9.8, 0.0, 0.0),
                     numParticles: u32(NUM_PARTICLES),
                     smoothingRadius: f32(uniforms.current.smoothingRadius),
                     restDensity: f32(uniforms.current.restDensity),
@@ -332,7 +333,8 @@ export default function Fluid3D() {
                 schema={schema}
                 values={uiValues}
                 onChange={setUniform}
-                style={{ left: 'auto', right: '10px' }}
+                // style={{ left: 'auto', right: '10px' }}
+                style={{ left: '10px', top: '60px' }}
             />
             <canvas
                 ref={canvasRef}
