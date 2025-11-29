@@ -86,7 +86,7 @@ export function PrimitiveDemo() {
             camera.distance = 18;
             camera.elevation = 0;
             camera.azimuth = 0;
-            camera.center = [0, 0, 0];
+            camera.center = new Float32Array([0, 0, 0]);
             camera.update();
             camera.attach(canvas);
 

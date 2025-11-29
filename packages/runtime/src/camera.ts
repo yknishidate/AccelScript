@@ -1,11 +1,15 @@
+import { add, sub, mul, normalize, cross } from './math';
+
 export class Camera {
     azimuth = -1.57;
     elevation = 0.0;
     distance = 5.0;
-    center = [0, 0, 0];
+    center = new Float32Array([0, 0, 0]);
 
-    pos = new Float32Array([0, 0, 0, 0]);
-    dir = new Float32Array([0, 0, 0, 0]);
+    pos: Float32Array = new Float32Array([0, 0, 0]);
+    dir: Float32Array = new Float32Array([0, 0, 0]);
+    up: Float32Array = new Float32Array([0, 1, 0]);
+    right: Float32Array = new Float32Array([1, 0, 0]);
 
     private isDragging = false;
     private lastMouseX = 0;
@@ -62,17 +66,24 @@ export class Camera {
     }
 
     update() {
-        const camX = this.distance * Math.cos(this.elevation) * Math.sin(this.azimuth);
-        const camY = this.distance * Math.sin(this.elevation);
-        const camZ = this.distance * Math.cos(this.elevation) * Math.cos(this.azimuth);
+        // Spherical to Cartesian
+        const x = this.distance * Math.cos(this.elevation) * Math.sin(this.azimuth);
+        const y = this.distance * Math.sin(this.elevation);
+        const z = this.distance * Math.cos(this.elevation) * Math.cos(this.azimuth);
 
-        this.pos[0] = camX + this.center[0];
-        this.pos[1] = camY + this.center[1];
-        this.pos[2] = camZ + this.center[2];
+        // Position relative to center
+        const offset = new Float32Array([x, y, z]);
+        this.pos = add(this.center, offset);
 
-        this.dir[0] = -camX;
-        this.dir[1] = -camY;
-        this.dir[2] = -camZ;
+        // Direction (looking at center)
+        this.dir = normalize(sub(this.center, this.pos));
+
+        // Right vector
+        const worldUp = new Float32Array([0, 1, 0]);
+        this.right = normalize(cross(this.dir, worldUp));
+
+        // Up vector
+        this.up = cross(this.right, this.dir);
     }
 
     private notifyChange() {

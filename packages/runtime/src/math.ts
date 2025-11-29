@@ -47,3 +47,44 @@ export function perspective(fovy: number, aspect: number, near: number, far: num
         0, 0, (2 * far * near) * nf, 0
     ]);
 }
+
+// Vector Math
+type Vec3 = [number, number, number] | Float32Array;
+
+export function add(a: Vec3, b: Vec3): Float32Array {
+    return new Float32Array([a[0] + b[0], a[1] + b[1], a[2] + b[2]]);
+}
+
+export function sub(a: Vec3, b: Vec3): Float32Array {
+    return new Float32Array([a[0] - b[0], a[1] - b[1], a[2] - b[2]]);
+}
+
+export function mul(a: Vec3, s: number): Float32Array {
+    return new Float32Array([a[0] * s, a[1] * s, a[2] * s]);
+}
+
+export function div(a: Vec3, s: number): Float32Array {
+    return new Float32Array([a[0] / s, a[1] / s, a[2] / s]);
+}
+
+export function len(v: Vec3): number {
+    return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+}
+
+export function normalize(v: Vec3): Float32Array {
+    const l = len(v);
+    if (l === 0) return new Float32Array([0, 0, 0]);
+    return div(v, l);
+}
+
+export function cross(a: Vec3, b: Vec3): Float32Array {
+    return new Float32Array([
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0]
+    ]);
+}
+
+export function dot(a: Vec3, b: Vec3): number {
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
