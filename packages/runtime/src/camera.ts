@@ -62,9 +62,9 @@ export class Camera {
     }
 
     update() {
-        const camX = this.distance * Math.cos(this.elevation) * Math.cos(this.azimuth);
+        const camX = this.distance * Math.cos(this.elevation) * Math.sin(this.azimuth);
         const camY = this.distance * Math.sin(this.elevation);
-        const camZ = this.distance * Math.cos(this.elevation) * Math.sin(this.azimuth);
+        const camZ = this.distance * Math.cos(this.elevation) * Math.cos(this.azimuth);
 
         this.pos[0] = camX + this.center[0];
         this.pos[1] = camY + this.center[1];

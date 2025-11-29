@@ -14,7 +14,6 @@ export function lookAt(eye: [number, number, number], center: [number, number, n
     const x2 = up[0] * zy - up[1] * zx;
     len = Math.sqrt(x0 * x0 + x1 * x1 + x2 * x2);
     if (!len) {
-        // degenerate
         return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
     }
     len = 1 / len;
@@ -22,23 +21,15 @@ export function lookAt(eye: [number, number, number], center: [number, number, n
     const xy = x1 * len;
     const xz = x2 * len;
 
-    const y0 = zy * xz - zz * xy;
-    const y1 = zz * xx - zx * xz;
-    const y2 = zx * xy - zy * xx;
-    len = Math.sqrt(y0 * y0 + y1 * y1 + y2 * y2);
-    if (!len) {
-        // degenerate
-        return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-    }
-    len = 1 / len;
-    const yx = y0 * len;
-    const yy = y1 * len;
-    const yz = y2 * len;
+    // Y = Z cross X
+    const yx = zy * xz - zz * xy;
+    const yy = zz * xx - zx * xz;
+    const yz = zx * xy - zy * xx;
 
     return new Float32Array([
-        xx, xy, xz, 0,
-        yx, yy, yz, 0,
-        zx, zy, zz, 0,
+        xx, yx, zx, 0,
+        xy, yy, zy, 0,
+        xz, yz, zz, 0,
         -(xx * eye[0] + xy * eye[1] + xz * eye[2]),
         -(yx * eye[0] + yy * eye[1] + yz * eye[2]),
         -(zx * eye[0] + zy * eye[1] + zz * eye[2]),

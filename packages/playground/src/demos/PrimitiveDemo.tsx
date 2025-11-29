@@ -85,7 +85,7 @@ export function PrimitiveDemo() {
             const camera = new Camera();
             camera.distance = 18;
             camera.elevation = 0;
-            camera.azimuth = -Math.PI / 2; // Look at -Z
+            camera.azimuth = 0;
             camera.center = [0, 0, 0];
             camera.update();
             camera.attach(canvas);
@@ -94,7 +94,7 @@ export function PrimitiveDemo() {
                 if (!isMounted) return;
                 camera.update();
 
-                runtime.clear(0.1, 0.1, 0.1, 1.0);
+                runtime.clear(0.5, 0.5, 0.5, 1.0);
 
                 // Draw Walls
                 await runtime.boxes(wallCenters, wallSizes, wallColors, { camera });
@@ -105,6 +105,9 @@ export function PrimitiveDemo() {
 
                 // Draw Light
                 await runtime.boxes(lightCenter, lightSize, lightColor, { camera, clearDepth: false });
+
+                // Draw Gizmo
+                await runtime.drawGizmo(camera);
 
                 animationId = requestAnimationFrame(render);
             };

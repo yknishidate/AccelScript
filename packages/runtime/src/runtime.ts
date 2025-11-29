@@ -4,6 +4,7 @@ import { LineRenderer } from './renderer/line-renderer';
 import { ImageRenderer } from './renderer/image-renderer';
 import { RectangleRenderer } from './renderer/rectangle-renderer';
 import { PrimitiveRenderer, PrimitiveType } from './renderer/primitive-renderer';
+import { GizmoRenderer } from './renderer/gizmo-renderer';
 import { Camera } from './camera';
 
 export class Runtime {
@@ -623,5 +624,18 @@ export class Runtime {
         }
 
         await this.imageRenderer.draw(this.context, array);
+    }
+
+    private gizmoRenderer: GizmoRenderer | null = null;
+
+    async drawGizmo(camera: Camera) {
+        if (!this.context) throw new Error("Canvas not setup");
+        await this.init();
+
+        if (!this.gizmoRenderer) {
+            this.gizmoRenderer = new GizmoRenderer(this.device!, this.presentationFormat);
+        }
+
+        await this.gizmoRenderer.draw(this.context, camera);
     }
 }
