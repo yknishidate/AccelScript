@@ -229,10 +229,10 @@ struct Globals {
     projection: mat4x4<f32>,
 }
 
-@group(0) @binding(0) var<storage, read> centers: array<f32>;
-@group(0) @binding(1) var<storage, read> sizes: array<f32>;
-@group(0) @binding(2) var<storage, read> rotations: array<f32>;
-@group(0) @binding(3) var<storage, read> colors: array<f32>;
+@group(0) @binding(0) var<storage, read> centers: array<vec3f>;
+@group(0) @binding(1) var<storage, read> sizes: array<vec3f>;
+@group(0) @binding(2) var<storage, read> rotations: array<vec3f>;
+@group(0) @binding(3) var<storage, read> colors: array<vec3f>;
 @group(0) @binding(4) var<uniform> globals: Globals;
 
 @vertex
@@ -240,28 +240,15 @@ fn vs_main(input: VertexInput, @builtin(instance_index) instanceIndex: u32) -> V
     var output: VertexOutput;
     
     // Read Center (vec3f)
-    let cx = centers[instanceIndex * 3 + 0];
-    let cy = centers[instanceIndex * 3 + 1];
-    let cz = centers[instanceIndex * 3 + 2];
-    let center = vec3<f32>(cx, cy, cz);
+    let center = centers[instanceIndex];
 
     // Read Size (vec3f)
-    let sx = sizes[instanceIndex * 3 + 0];
-    let sy = sizes[instanceIndex * 3 + 1];
-    let sz = sizes[instanceIndex * 3 + 2];
-    let size = vec3<f32>(sx, sy, sz);
+    let size = sizes[instanceIndex];
 
     // Read Rotation (vec3f)
-    let rx = rotations[instanceIndex * 3 + 0];
-    let ry = rotations[instanceIndex * 3 + 1];
-    let rz = rotations[instanceIndex * 3 + 2];
-    let rotation = vec3<f32>(rx, ry, rz);
+    let rotation = rotations[instanceIndex];
 
     // Read Color (vec3f)
-    let r = colors[instanceIndex * 3 + 0];
-    let g = colors[instanceIndex * 3 + 1];
-    let b = colors[instanceIndex * 3 + 2];
-    let color = vec4<f32>(r, g, b, 1.0);
     
     // Scale position by size
     var pos = input.position * size;
@@ -291,7 +278,7 @@ fn vs_main(input: VertexInput, @builtin(instance_index) instanceIndex: u32) -> V
     let worldPos = center + pos;
     
     output.position = globals.projection * globals.view * vec4<f32>(worldPos, 1.0);
-    output.color = color;
+    output.color = vec4<f32>(colors[instanceIndex], 1.0);
     
     // Rotate normal
     var norm = input.normal;
@@ -398,7 +385,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     ) {
         const clearDepth = options.clearDepth ?? false;
         const rotations = options.rotations;
-        const numPrims = centers.data.length / 3;
+        const numPrims = centers.size;
 
         // Ensure buffers exist
         const centerBuffer = await centers.ensureBuffer(this.device);
@@ -410,11 +397,12 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             rotationBuffer = await rotations.ensureBuffer(this.device);
         } else {
             // Create a default zero buffer if not present
-            if (!this.defaultRotationBuffer || this.defaultRotationBuffer.size < numPrims * 3 * 4) {
+            if (!this.defaultRotationBuffer || this.defaultRotationBuffer.size < numPrims * 4 * 4) {
                 if (this.defaultRotationBuffer) this.defaultRotationBuffer.destroy();
                 this.defaultRotationBuffer = this.device.createBuffer({
-                    size: Math.max(16, numPrims * 3 * 4), // Ensure at least 16 bytes
+                    size: Math.max(16, numPrims * 4 * 4), // Ensure at least 16 bytes
                     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                    label: "Default rotation buffer",
                 });
                 // Zero initialized by default creation
             }

@@ -24,18 +24,18 @@ export class SharedArray<T = any> {
                 this.shape = dataOrSize;
                 this.ndim = dataOrSize.length;
                 const elementCount = dataOrSize.reduce((a, b) => a * b, 1);
-                const totalFloats = elementCount * this.type.components;
+                const totalFloats = elementCount * this.type.stride;
                 this.hostData = new this.type.TypedArray(totalFloats);
             } else if (typeof dataOrSize === 'number') {
                 // new SharedArray(vec2f, 10) -> 10 vectors
                 this.shape = [dataOrSize];
                 this.ndim = 1;
-                const totalFloats = dataOrSize * this.type.components;
+                const totalFloats = dataOrSize * this.type.stride;
                 this.hostData = new this.type.TypedArray(totalFloats);
             } else if (ArrayBuffer.isView(dataOrSize)) {
                 // new SharedArray(vec2f, new Float32Array([...])) -> Data
                 this.hostData = dataOrSize;
-                this.shape = [this.hostData.length / this.type.components];
+                this.shape = [this.hostData.length / this.type.stride];
                 this.ndim = 1;
             } else {
                 throw new Error("Invalid data for SharedArray");
@@ -72,7 +72,7 @@ export class SharedArray<T = any> {
         if (index < 0 || index >= this.size) {
             throw new Error(`Index out of bounds: ${index}`);
         }
-        const start = index * this.type.components;
+        const start = index * this.type.stride;
         const end = start + this.type.components;
         return this.hostData.subarray(start, end);
     }
@@ -84,7 +84,7 @@ export class SharedArray<T = any> {
         if (index < 0 || index >= this.size) {
             throw new Error(`Index out of bounds: ${index}`);
         }
-        const start = index * this.type.components;
+        const start = index * this.type.stride;
         if (value.length !== this.type.components) {
             console.warn(`Invalid value for SharedArray assignment at index ${index}. Expected length ${this.type.components}, got ${value.length}`);
             return;
@@ -110,7 +110,7 @@ export class SharedArray<T = any> {
      * Total number of elements (vectors if vector type, scalars if scalar type)
      */
     get size(): number {
-        return this.hostData.length / this.type.components;
+        return this.hostData.length / this.type.stride;
     }
 
     /**

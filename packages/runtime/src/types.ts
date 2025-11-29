@@ -16,6 +16,7 @@ export interface TypeSpec<T extends TypedArray> {
     kind: string;
     components: number;
     elementSize: number; // bytes per component (e.g. 4 for f32)
+    stride: number; // number of elements in underlying TypedArray per logical element
     TypedArray: TypedArrayConstructor<T>;
 }
 
@@ -220,12 +221,14 @@ const createType = <T extends TypedArray>(
     components: number,
     elementSize: number,
     TypedArray: TypedArrayConstructor<T>,
-    fn: (...args: number[]) => any
+    fn: (...args: number[]) => any,
+    stride?: number
 ) => {
     const wrapped = fn;
     (wrapped as any).kind = kind;
     (wrapped as any).components = components;
     (wrapped as any).elementSize = elementSize;
+    (wrapped as any).stride = stride || components;
     (wrapped as any).TypedArray = TypedArray;
     return wrapped as typeof fn & TypeSpec<T>;
 };
@@ -237,17 +240,17 @@ export const f32 = createType('f32', 1, 4, Float32Array, (v) => ({ type: 'f32', 
 
 // Float Vectors
 export const vec2f = createType('vec2f', 2, 4, Float32Array, (x, y) => new Float32Array([x, y]));
-export const vec3f = createType('vec3f', 3, 4, Float32Array, (x, y, z) => new Float32Array([x, y, z]));
+export const vec3f = createType('vec3f', 3, 4, Float32Array, (x, y, z) => new Float32Array([x, y, z]), 4);
 export const vec4f = createType('vec4f', 4, 4, Float32Array, (x, y, z, w) => new Float32Array([x, y, z, w]));
 
 // Integer Vectors
 export const vec2i = createType('vec2i', 2, 4, Int32Array, (x, y) => new Int32Array([x, y]));
-export const vec3i = createType('vec3i', 3, 4, Int32Array, (x, y, z) => new Int32Array([x, y, z]));
+export const vec3i = createType('vec3i', 3, 4, Int32Array, (x, y, z) => new Int32Array([x, y, z]), 4);
 export const vec4i = createType('vec4i', 4, 4, Int32Array, (x, y, z, w) => new Int32Array([x, y, z, w]));
 
 // Unsigned Integer Vectors
 export const vec2u = createType('vec2u', 2, 4, Uint32Array, (x, y) => new Uint32Array([x, y]));
-export const vec3u = createType('vec3u', 3, 4, Uint32Array, (x, y, z) => new Uint32Array([x, y, z]));
+export const vec3u = createType('vec3u', 3, 4, Uint32Array, (x, y, z) => new Uint32Array([x, y, z]), 4);
 export const vec4u = createType('vec4u', 4, 4, Uint32Array, (x, y, z, w) => new Uint32Array([x, y, z, w]));
 
 // Matrices
