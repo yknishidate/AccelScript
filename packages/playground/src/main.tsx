@@ -10,11 +10,12 @@ import RayTracing from './demos/RayTracing.gen'
 
 import Rectangles from './demos/Rectangles.gen'
 import { SphereDemo } from './demos/SphereDemo'
+import { PrimitiveDemo } from './demos/PrimitiveDemo'
 
 import './index.css'
 
 function Layout() {
-    const [demo, setDemo] = useState<"vector" | "triangle" | "circles" | "lines" | "image" | "mouse" | "raytracing" | "rectangles" | "spheres">("spheres");
+    const [demo, setDemo] = useState<"vector" | "triangle" | "circles" | "lines" | "image" | "mouse" | "raytracing" | "rectangles" | "spheres" | "primitives">("primitives");
 
     const demos = [
         { id: "mouse", label: "Mouse", description: "Mouse interaction demo" },
@@ -26,6 +27,7 @@ function Layout() {
         { id: "image", label: "Image Processing", description: "Image manipulation filters" },
         { id: "raytracing", label: "Ray Tracing", description: "Simple sphere ray tracing" },
         { id: "spheres", label: "Spheres", description: "3D Sphere Renderer" },
+        { id: "primitives", label: "Primitives", description: "Primitive rendering demo" },
     ] as const;
 
     const currentDemo = demos.find(d => d.id === demo);
@@ -66,6 +68,7 @@ function Layout() {
                     {demo === "mouse" && <MouseDemo />}
                     {demo === "raytracing" && <RayTracing />}
                     {demo === "spheres" && <SphereDemo />}
+                    {demo === "primitives" && <PrimitiveDemo />}
                 </div>
             </main>
         </div>

@@ -3,7 +3,7 @@ import { CircleRenderer } from './renderer/circle-renderer';
 import { LineRenderer } from './renderer/line-renderer';
 import { ImageRenderer } from './renderer/image-renderer';
 import { RectangleRenderer } from './renderer/rectangle-renderer';
-import { SphereRenderer } from './renderer/sphere-renderer';
+import { PrimitiveRenderer, PrimitiveType } from './renderer/primitive-renderer';
 import { Camera } from './camera';
 
 export class Runtime {
@@ -434,7 +434,7 @@ export class Runtime {
     private lineRenderer: LineRenderer | null = null;
     private imageRenderer: ImageRenderer | null = null;
     private rectangleRenderer: RectangleRenderer | null = null;
-    private sphereRenderer: SphereRenderer | null = null;
+    private primitiveRenderer: PrimitiveRenderer | null = null;
 
     async circle(center: [number, number], radius: number, color: [number, number, number, number], options: { aspect?: number } = {}) {
         const c = new SharedArray(2); c.data.set(center);
@@ -537,11 +537,67 @@ export class Runtime {
         if (!this.context) throw new Error("Canvas not setup");
         await this.init();
 
-        if (!this.sphereRenderer) {
-            this.sphereRenderer = new SphereRenderer(this.device!, this.presentationFormat);
+        if (!this.primitiveRenderer) {
+            this.primitiveRenderer = new PrimitiveRenderer(this.device!, this.presentationFormat);
         }
 
-        await this.sphereRenderer.draw(this.context, centers, radii, colors, options);
+        await this.primitiveRenderer.draw(this.context, centers, radii, colors, PrimitiveType.Sphere, options);
+    }
+
+    async box(
+        center: [number, number, number],
+        size: [number, number, number],
+        color: [number, number, number, number] | [number, number, number],
+        options: { aspect?: number, camera?: Camera } = {}
+    ) {
+        const c = new SharedArray(3); c.data.set(center);
+        const s = new SharedArray(3); s.data.set(size);
+        const col = new SharedArray(color.length); col.data.set(color);
+        return this.boxes(c, s, col, options);
+    }
+
+    async boxes(
+        centers: SharedArray,
+        sizes: SharedArray,
+        colors: SharedArray,
+        options: { aspect?: number, camera?: Camera } = {}
+    ) {
+        if (!this.context) throw new Error("Canvas not setup");
+        await this.init();
+
+        if (!this.primitiveRenderer) {
+            this.primitiveRenderer = new PrimitiveRenderer(this.device!, this.presentationFormat);
+        }
+
+        await this.primitiveRenderer.draw(this.context, centers, sizes, colors, PrimitiveType.Box, options);
+    }
+
+    async plane(
+        center: [number, number, number],
+        size: [number, number, number],
+        color: [number, number, number, number] | [number, number, number],
+        options: { aspect?: number, camera?: Camera } = {}
+    ) {
+        const c = new SharedArray(3); c.data.set(center);
+        const s = new SharedArray(3); s.data.set(size);
+        const col = new SharedArray(color.length); col.data.set(color);
+        return this.planes(c, s, col, options);
+    }
+
+    async planes(
+        centers: SharedArray,
+        sizes: SharedArray,
+        colors: SharedArray,
+        options: { aspect?: number, camera?: Camera } = {}
+    ) {
+        if (!this.context) throw new Error("Canvas not setup");
+        await this.init();
+
+        if (!this.primitiveRenderer) {
+            this.primitiveRenderer = new PrimitiveRenderer(this.device!, this.presentationFormat);
+        }
+
+        await this.primitiveRenderer.draw(this.context, centers, sizes, colors, PrimitiveType.Plane, options);
     }
 
     // Display a 2D SharedArray as an image on the canvas

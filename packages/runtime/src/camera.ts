@@ -61,7 +61,7 @@ export class Camera {
         this.isDragging = false;
     }
 
-    private update() {
+    update() {
         const camX = this.distance * Math.cos(this.elevation) * Math.cos(this.azimuth);
         const camY = this.distance * Math.sin(this.elevation);
         const camZ = this.distance * Math.cos(this.elevation) * Math.sin(this.azimuth);
