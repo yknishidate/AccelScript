@@ -225,6 +225,7 @@ struct VertexOutput {
 struct Instance {
     center: vec3<f32>,
     size: vec3<f32>, // radius (uniform) or half-extents (non-uniform)
+    rotation: vec3<f32>, // Euler angles (x, y, z)
     color: vec4<f32>,
 }
 
@@ -242,23 +243,55 @@ fn vs_main(input: VertexInput, @builtin(instance_index) instanceIndex: u32) -> V
     
     let instance = instances[instanceIndex];
     
-    // Scale position by size and translate by center
-    // input.position is -1 to 1.
-    // instance.size is the scale factor.
-    // For sphere, size is [radius, radius, radius].
-    // For box, size is [width, height, depth] (or half-extents).
-    // Let's assume size is the half-extent multiplier.
-    let worldPos = instance.center + input.position * instance.size;
+    // Scale position by size
+    var pos = input.position * instance.size;
+
+    // Apply rotation (Euler angles)
+    let c = cos(instance.rotation);
+    let s = sin(instance.rotation);
+
+    // Rotate X
+    let y1 = pos.y * c.x - pos.z * s.x;
+    let z1 = pos.y * s.x + pos.z * c.x;
+    pos.y = y1;
+    pos.z = z1;
+
+    // Rotate Y
+    let x2 = pos.x * c.y + pos.z * s.y;
+    let z2 = -pos.x * s.y + pos.z * c.y;
+    pos.x = x2;
+    pos.z = z2;
+
+    // Rotate Z
+    let x3 = pos.x * c.z - pos.y * s.z;
+    let y3 = pos.x * s.z + pos.y * c.z;
+    pos.x = x3;
+    pos.y = y3;
+
+    let worldPos = instance.center + pos;
     
     output.position = globals.projection * globals.view * vec4<f32>(worldPos, 1.0);
     output.color = instance.color;
-    // Normal transformation:
-    // For uniform scaling (sphere), normal is just rotated (identity here since no rotation).
-    // For non-uniform scaling (box), normal needs inverse-transpose scaling.
-    // But for axis-aligned box, normals are axis aligned, so it's fine?
-    // Actually, if we scale a box non-uniformly, the normals on faces are still axis aligned.
-    // So input.normal is correct for axis-aligned box.
-    output.normal = input.normal; 
+    
+    // Rotate normal
+    var norm = input.normal;
+    // Rotate X
+    let ny1 = norm.y * c.x - norm.z * s.x;
+    let nz1 = norm.y * s.x + norm.z * c.x;
+    norm.y = ny1;
+    norm.z = nz1;
+    // Rotate Y
+    let nx2 = norm.x * c.y + norm.z * s.y;
+    let nz2 = -norm.x * s.y + norm.z * c.y;
+    norm.x = nx2;
+    norm.z = nz2;
+    // Rotate Z
+    let nx3 = norm.x * c.z - norm.y * s.z;
+    let ny3 = norm.x * s.z + norm.y * c.z;
+    norm.x = nx3;
+    norm.y = ny3;
+
+    output.normal = norm; 
     output.worldPos = worldPos;
     
     return output;
@@ -340,13 +373,18 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         sizes: SharedArray, // vec3 (radius/half-extents)
         colors: SharedArray,
         type: PrimitiveType,
-        options: { aspect?: number, camera?: Camera, clearDepth?: boolean } = {}
+        options: { aspect?: number, camera?: Camera, clearDepth?: boolean, rotations?: SharedArray } = {}
     ) {
         const clearDepth = options.clearDepth ?? true;
+        const rotations = options.rotations;
         const numPrims = centers.data.length / 3;
 
         if (sizes.data.length !== numPrims * 3 && sizes.data.length !== numPrims && sizes.data.length !== 1 && sizes.data.length !== 3) {
             throw new Error(`sizes length must be numPrims*3, numPrims, 1, or 3`);
+        }
+
+        if (rotations && rotations.data.length !== numPrims * 3) {
+            throw new Error(`rotations length must be numPrims*3`);
         }
 
         const isColorVec4 = colors.data.length === numPrims * 4;
@@ -359,22 +397,16 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             singleSize = sizes.data as Float32Array;
         }
 
-        // Pack instance data: [center.x, center.y, center.z, padding, size.x, size.y, size.z, padding, color.r, color.g, color.b, color.a]
-        // Wait, shader struct:
-        // struct Instance {
-        //     center: vec3<f32>,
-        //     size: vec3<f32>,
-        //     color: vec4<f32>,
-        // }
-        // Alignment:
-        // center: offset 0, size 12. Padding 4.
-        // size: offset 16, size 12. Padding 4.
-        // color: offset 32, size 16.
-        // Total stride: 48 bytes.
-
-        const instanceData = new Float32Array(numPrims * 12); // 12 floats = 48 bytes
+        // Pack instance data: 
+        // center (12) + pad (4)
+        // size (12) + pad (4)
+        // rotation (12) + pad (4)
+        // color (16)
+        // Total 64 bytes
+        const stride = 16; // floats
+        const instanceData = new Float32Array(numPrims * stride);
         for (let i = 0; i < numPrims; i++) {
-            const base = i * 12;
+            const base = i * stride;
 
             // Center
             instanceData[base + 0] = centers.data[i * 3 + 0];
@@ -399,17 +431,29 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             }
             // Padding at +7
 
+            // Rotation
+            if (rotations) {
+                instanceData[base + 8] = rotations.data[i * 3 + 0];
+                instanceData[base + 9] = rotations.data[i * 3 + 1];
+                instanceData[base + 10] = rotations.data[i * 3 + 2];
+            } else {
+                instanceData[base + 8] = 0;
+                instanceData[base + 9] = 0;
+                instanceData[base + 10] = 0;
+            }
+            // Padding at +11
+
             // Color
             if (isColorVec4) {
-                instanceData[base + 8] = colors.data[i * 4 + 0];
-                instanceData[base + 9] = colors.data[i * 4 + 1];
-                instanceData[base + 10] = colors.data[i * 4 + 2];
-                instanceData[base + 11] = colors.data[i * 4 + 3];
+                instanceData[base + 12] = colors.data[i * 4 + 0];
+                instanceData[base + 13] = colors.data[i * 4 + 1];
+                instanceData[base + 14] = colors.data[i * 4 + 2];
+                instanceData[base + 15] = colors.data[i * 4 + 3];
             } else {
-                instanceData[base + 8] = colors.data[i * 3 + 0];
-                instanceData[base + 9] = colors.data[i * 3 + 1];
-                instanceData[base + 10] = colors.data[i * 3 + 2];
-                instanceData[base + 11] = 1.0;
+                instanceData[base + 12] = colors.data[i * 3 + 0];
+                instanceData[base + 13] = colors.data[i * 3 + 1];
+                instanceData[base + 14] = colors.data[i * 3 + 2];
+                instanceData[base + 15] = 1.0;
             }
         }
 

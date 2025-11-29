@@ -548,19 +548,24 @@ export class Runtime {
         center: [number, number, number],
         size: [number, number, number],
         color: [number, number, number, number] | [number, number, number],
-        options: { aspect?: number, camera?: Camera } = {}
+        options: { aspect?: number, camera?: Camera, rotation?: [number, number, number] } = {}
     ) {
         const c = new SharedArray(3); c.data.set(center);
         const s = new SharedArray(3); s.data.set(size);
         const col = new SharedArray(color.length); col.data.set(color);
-        return this.boxes(c, s, col, options);
+        let rot: SharedArray | undefined;
+        if (options.rotation) {
+            rot = new SharedArray(3);
+            rot.data.set(options.rotation);
+        }
+        return this.boxes(c, s, col, { ...options, rotations: rot });
     }
 
     async boxes(
         centers: SharedArray,
         sizes: SharedArray,
         colors: SharedArray,
-        options: { aspect?: number, camera?: Camera } = {}
+        options: { aspect?: number, camera?: Camera, clearDepth?: boolean, rotations?: SharedArray } = {}
     ) {
         if (!this.context) throw new Error("Canvas not setup");
         await this.init();
@@ -576,19 +581,24 @@ export class Runtime {
         center: [number, number, number],
         size: [number, number, number],
         color: [number, number, number, number] | [number, number, number],
-        options: { aspect?: number, camera?: Camera } = {}
+        options: { aspect?: number, camera?: Camera, rotation?: [number, number, number] } = {}
     ) {
         const c = new SharedArray(3); c.data.set(center);
         const s = new SharedArray(3); s.data.set(size);
         const col = new SharedArray(color.length); col.data.set(color);
-        return this.planes(c, s, col, options);
+        let rot: SharedArray | undefined;
+        if (options.rotation) {
+            rot = new SharedArray(3);
+            rot.data.set(options.rotation);
+        }
+        return this.planes(c, s, col, { ...options, rotations: rot });
     }
 
     async planes(
         centers: SharedArray,
         sizes: SharedArray,
         colors: SharedArray,
-        options: { aspect?: number, camera?: Camera } = {}
+        options: { aspect?: number, camera?: Camera, rotations?: SharedArray } = {}
     ) {
         if (!this.context) throw new Error("Canvas not setup");
         await this.init();
