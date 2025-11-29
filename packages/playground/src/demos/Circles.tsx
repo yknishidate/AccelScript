@@ -63,7 +63,7 @@ export default function Circles() {
                 // @ts-ignore
                 await updatePositions(centers, velocities);
                 // @ts-ignore
-                await runtime.clear(0.2, 0.2, 0.2);
+                await runtime.clear([0.2, 0.2, 0.2, 1.0]);
                 // @ts-ignore
                 await runtime.circles(centers, radii, colors);
 

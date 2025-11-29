@@ -65,9 +65,27 @@ export class Runtime {
         });
     }
 
-    async clear(r: number, g: number, b: number, a: number = 1.0) {
+    depthTexture: GPUTexture | null = null;
+
+    ensureDepthTexture() {
+        if (!this.context) return null;
+        const width = this.context.canvas.width;
+        const height = this.context.canvas.height;
+        if (!this.depthTexture || this.depthTexture.width !== width || this.depthTexture.height !== height) {
+            if (this.depthTexture) this.depthTexture.destroy();
+            this.depthTexture = this.device!.createTexture({
+                size: [width, height],
+                format: "depth24plus",
+                usage: GPUTextureUsage.RENDER_ATTACHMENT,
+            });
+        }
+        return this.depthTexture;
+    }
+
+    async clear(color: [number, number, number, number], depth?: number) {
         if (!this.context) throw new Error("Canvas not setup");
         const device = this.device!;
+        const [r, g, b, a] = color;
 
         const commandEncoder = device.createCommandEncoder();
         const textureView = this.context.getCurrentTexture().createView();
@@ -82,6 +100,18 @@ export class Runtime {
                 },
             ],
         };
+
+        if (depth !== undefined) {
+            const depthTex = this.ensureDepthTexture();
+            if (depthTex) {
+                renderPassDescriptor.depthStencilAttachment = {
+                    view: depthTex.createView(),
+                    depthClearValue: depth,
+                    depthLoadOp: "clear",
+                    depthStoreOp: "store"
+                };
+            }
+        }
 
         const passEncoder = commandEncoder.beginRenderPass(renderPassDescriptor);
         passEncoder.end();
@@ -533,7 +563,7 @@ export class Runtime {
         centers: SharedArray,
         radii: SharedArray,
         colors: SharedArray,
-        options: { aspect?: number, camera?: Camera } = {}
+        options: { aspect?: number, camera?: Camera, clearDepth?: boolean } = {}
     ) {
         if (!this.context) throw new Error("Canvas not setup");
         await this.init();
@@ -542,7 +572,9 @@ export class Runtime {
             this.primitiveRenderer = new PrimitiveRenderer(this.device!, this.presentationFormat);
         }
 
-        await this.primitiveRenderer.draw(this.context, centers, radii, colors, PrimitiveType.Sphere, options);
+        const depthTexture = this.ensureDepthTexture();
+        if (!depthTexture) throw new Error("Failed to create depth texture");
+        await this.primitiveRenderer.draw(this.context, centers, radii, colors, PrimitiveType.Sphere, depthTexture, options);
     }
 
     async box(
@@ -575,7 +607,9 @@ export class Runtime {
             this.primitiveRenderer = new PrimitiveRenderer(this.device!, this.presentationFormat);
         }
 
-        await this.primitiveRenderer.draw(this.context, centers, sizes, colors, PrimitiveType.Box, options);
+        const depthTexture = this.ensureDepthTexture();
+        if (!depthTexture) throw new Error("Failed to create depth texture");
+        await this.primitiveRenderer.draw(this.context, centers, sizes, colors, PrimitiveType.Box, depthTexture, options);
     }
 
     async plane(
@@ -608,7 +642,9 @@ export class Runtime {
             this.primitiveRenderer = new PrimitiveRenderer(this.device!, this.presentationFormat);
         }
 
-        await this.primitiveRenderer.draw(this.context, centers, sizes, colors, PrimitiveType.Plane, options);
+        const depthTexture = this.ensureDepthTexture();
+        if (!depthTexture) throw new Error("Failed to create depth texture");
+        await this.primitiveRenderer.draw(this.context, centers, sizes, colors, PrimitiveType.Plane, depthTexture, options);
     }
 
     // Display a 2D SharedArray as an image on the canvas
@@ -636,6 +672,8 @@ export class Runtime {
             this.gizmoRenderer = new GizmoRenderer(this.device!, this.presentationFormat);
         }
 
-        await this.gizmoRenderer.draw(this.context, camera);
+        const depthTexture = this.ensureDepthTexture();
+        if (!depthTexture) throw new Error("Failed to create depth texture");
+        await this.gizmoRenderer.draw(this.context, camera, depthTexture);
     }
 }

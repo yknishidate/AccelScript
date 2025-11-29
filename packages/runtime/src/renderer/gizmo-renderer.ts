@@ -131,7 +131,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
     async draw(
         context: GPUCanvasContext,
-        camera: Camera
+        camera: Camera,
+        depthTexture: GPUTexture
     ) {
         this.createMesh();
         if (!this.vertexBuffer) return;
@@ -201,11 +202,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 storeOp: "store",
             }],
             depthStencilAttachment: {
-                view: this.device.createTexture({
-                    size: [canvasWidth, canvasHeight],
-                    format: "depth24plus",
-                    usage: GPUTextureUsage.RENDER_ATTACHMENT,
-                }).createView(),
+                view: depthTexture.createView(),
                 depthClearValue: 1.0,
                 depthLoadOp: "clear",
                 depthStoreOp: "discard",

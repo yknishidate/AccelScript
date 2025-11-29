@@ -94,17 +94,17 @@ export function PrimitiveDemo() {
                 if (!isMounted) return;
                 camera.update();
 
-                runtime.clear(0.5, 0.5, 0.5, 1.0);
+                runtime.clear([0.5, 0.5, 0.5, 1.0], 1.0);
 
                 // Draw Walls
                 await runtime.boxes(wallCenters, wallSizes, wallColors, { camera });
 
                 // Draw Objects
-                await runtime.boxes(boxCenters, boxSizes, boxColors, { camera, clearDepth: false });
-                await runtime.spheres(sphereCenters, sphereSizes, sphereColors, { camera, clearDepth: false });
+                await runtime.boxes(boxCenters, boxSizes, boxColors, { camera });
+                await runtime.spheres(sphereCenters, sphereSizes, sphereColors, { camera });
 
                 // Draw Light
-                await runtime.boxes(lightCenter, lightSize, lightColor, { camera, clearDepth: false });
+                await runtime.boxes(lightCenter, lightSize, lightColor, { camera });
 
                 // Draw Gizmo
                 await runtime.drawGizmo(camera);

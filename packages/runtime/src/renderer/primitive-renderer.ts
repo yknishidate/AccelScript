@@ -12,7 +12,7 @@ export class PrimitiveRenderer {
     private pipeline: GPURenderPipeline | null = null;
     private device: GPUDevice;
     private presentationFormat: GPUTextureFormat;
-    private depthTexture: GPUTexture | null = null;
+
 
     private sphereVertexBuffer: GPUBuffer | null = null;
     private sphereIndexBuffer: GPUBuffer | null = null;
@@ -70,8 +70,8 @@ export class PrimitiveRenderer {
                 const first = (y * (widthSegments + 1)) + x;
                 const second = first + widthSegments + 1;
 
-                indices.push(first, second, first + 1);
-                indices.push(second, second + 1, first + 1);
+                indices.push(first, first + 1, second);
+                indices.push(second, first + 1, second + 1);
             }
         }
 
@@ -373,9 +373,10 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         sizes: SharedArray, // vec3 (radius/half-extents)
         colors: SharedArray,
         type: PrimitiveType,
+        depthTexture: GPUTexture,
         options: { aspect?: number, camera?: Camera, clearDepth?: boolean, rotations?: SharedArray } = {}
     ) {
-        const clearDepth = options.clearDepth ?? true;
+        const clearDepth = options.clearDepth ?? false;
         const rotations = options.rotations;
         const numPrims = centers.data.length / 3;
 
@@ -511,17 +512,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             ],
         });
 
-        // Depth texture
-        const canvasWidth = context.canvas.width;
-        const canvasHeight = context.canvas.height;
-        if (!this.depthTexture || this.depthTexture.width !== canvasWidth || this.depthTexture.height !== canvasHeight) {
-            if (this.depthTexture) this.depthTexture.destroy();
-            this.depthTexture = this.device.createTexture({
-                size: [canvasWidth, canvasHeight],
-                format: "depth24plus",
-                usage: GPUTextureUsage.RENDER_ATTACHMENT,
-            });
-        }
+        // Depth texture passed in
+
 
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = context.getCurrentTexture().createView();
@@ -534,7 +526,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                 storeOp: "store",
             }],
             depthStencilAttachment: {
-                view: this.depthTexture.createView(),
+                view: depthTexture.createView(),
                 depthClearValue: 1.0,
                 depthLoadOp: clearDepth ? "clear" : "load",
                 depthStoreOp: "store",
