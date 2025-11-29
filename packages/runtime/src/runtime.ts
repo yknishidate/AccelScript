@@ -1,4 +1,4 @@
-import { SharedArray } from './shared-array';
+import { SharedArray, SyncMode } from './shared-array';
 import { CircleRenderer } from './renderer/circle-renderer';
 import { LineRenderer } from './renderer/line-renderer';
 import { ImageRenderer } from './renderer/image-renderer';
@@ -152,7 +152,9 @@ export class Runtime {
             if (arg instanceof SharedArray) {
                 // Reuse existing buffer from SharedArray
                 const buffer = await arg.ensureBuffer(device);
-                await arg.syncToDevice(device);
+                if (arg.syncMode !== SyncMode.GpuToCpu && arg.syncMode !== SyncMode.None) {
+                    await arg.syncToDevice(device);
+                }
                 sharedArrays.push(arg);
                 entries.push({
                     binding: i,
@@ -439,7 +441,9 @@ export class Runtime {
 
         // Sync SharedArrays to host
         for (const sharedArray of sharedArrays) {
-            await sharedArray.syncToHost(device);
+            if (sharedArray.syncMode !== SyncMode.CpuToGpu && sharedArray.syncMode !== SyncMode.None) {
+                await sharedArray.syncToHost(device);
+            }
         }
 
         // Map and read plain Float32Arrays

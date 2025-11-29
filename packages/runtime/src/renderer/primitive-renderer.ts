@@ -1,4 +1,4 @@
-import { SharedArray } from '../shared-array';
+import { SharedArray, SyncMode } from '../shared-array';
 import { Camera } from '../camera';
 import { lookAt, perspective } from '../math';
 import { vec3f } from '../types';
@@ -389,12 +389,26 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
         // Ensure buffers exist
         const centerBuffer = await centers.ensureBuffer(this.device);
+        if (centers.syncMode !== SyncMode.GpuToCpu && centers.syncMode !== SyncMode.None) {
+            await centers.syncToDevice(this.device);
+        }
+
         const sizeBuffer = await sizes.ensureBuffer(this.device);
+        if (sizes.syncMode !== SyncMode.GpuToCpu && sizes.syncMode !== SyncMode.None) {
+            await sizes.syncToDevice(this.device);
+        }
+
         const colorBuffer = await colors.ensureBuffer(this.device);
+        if (colors.syncMode !== SyncMode.GpuToCpu && colors.syncMode !== SyncMode.None) {
+            await colors.syncToDevice(this.device);
+        }
 
         let rotationBuffer: GPUBuffer;
         if (rotations) {
             rotationBuffer = await rotations.ensureBuffer(this.device);
+            if (rotations.syncMode !== SyncMode.GpuToCpu && rotations.syncMode !== SyncMode.None) {
+                await rotations.syncToDevice(this.device);
+            }
         } else {
             // Create a default zero buffer if not present
             if (!this.defaultRotationBuffer || this.defaultRotationBuffer.size < numPrims * 4 * 4) {

@@ -1,5 +1,12 @@
 import { TypedArray, TypedArrayConstructor, TypeSpec, f32 } from './types';
 
+export enum SyncMode {
+    Auto = 0,      // Bidirectional sync (default)
+    CpuToGpu = 1,  // Upload only (CPU -> GPU)
+    GpuToCpu = 2,  // Download only (GPU -> CPU)
+    None = 3       // No automatic sync
+}
+
 export class SharedArray<T = any> {
     private hostData: TypedArray;
     private deviceBuffer: GPUBuffer | null = null;
@@ -8,16 +15,19 @@ export class SharedArray<T = any> {
     public readonly shape: number[];
     public readonly ndim: number;
     public readonly type: TypeSpec<any>;
+    public syncMode: SyncMode = SyncMode.Auto;
 
     constructor(
         typeOrData: TypeSpec<any> | number | number[] | TypedArray,
-        shapeOrSizeOrData?: number | number[] | TypedArray
+        shapeOrSizeOrData?: number | number[] | TypedArray,
+        syncMode: SyncMode = SyncMode.Auto
     ) {
-        // Handle overload: constructor(type: TypeSpec, data: number[])
-        // or constructor(type: TypeSpec, size: number)
+        // Handle overload: constructor(type: TypeSpec, data: number[], syncMode?)
+        // or constructor(type: TypeSpec, size: number, syncMode?)
         if (typeof typeOrData === 'function' && 'kind' in typeOrData) {
             this.type = typeOrData as TypeSpec<any>;
             const dataOrSize = shapeOrSizeOrData!;
+            this.syncMode = syncMode;
 
             if (Array.isArray(dataOrSize)) {
                 // new SharedArray(vec2f, [height, width]) -> Shape
@@ -44,6 +54,10 @@ export class SharedArray<T = any> {
             // Old behavior: default to f32
             this.type = f32 as any as TypeSpec<any>;
             const shapeOrSizeOrData = typeOrData as number | number[] | TypedArray;
+            // Check if the last argument is actually SyncMode (if called with old signature + syncMode)
+            // But old signature didn't have syncMode. Let's assume old signature users won't pass syncMode for now
+            // or we need more complex checking.
+            // Actually, let's just support syncMode for the new signature for now.
 
             if (Array.isArray(shapeOrSizeOrData)) {
                 // Multi-dimensional array: new SharedArray([10, 20, 3])

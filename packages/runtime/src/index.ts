@@ -1,5 +1,6 @@
 export * from './types';
 export * from './shared-array';
+export { SyncMode } from './shared-array';
 export * from './runtime';
 export * from './camera';
 

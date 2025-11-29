@@ -41,11 +41,13 @@ export function useUniforms<T extends UniformsSchema>(schema: T) {
 export const UniformControls = ({
     schema,
     values,
-    onChange
+    onChange,
+    style
 }: {
     schema: UniformsSchema,
     values: Record<string, number>,
-    onChange: (key: string, val: number) => void
+    onChange: (key: string, val: number) => void,
+    style?: React.CSSProperties
 }) => {
     return (
         <div style={{
@@ -53,7 +55,8 @@ export const UniformControls = ({
             color: 'white', zIndex: 10,
             background: 'rgba(0,0,0,0.5)', padding: '10px', borderRadius: '4px',
             display: 'flex', flexDirection: 'column', gap: '10px',
-            fontFamily: 'monospace'
+            fontFamily: 'monospace',
+            ...style
         }}>
             {Object.entries(schema).map(([key, config]) => (
                 <label key={key} style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '12px' }}>

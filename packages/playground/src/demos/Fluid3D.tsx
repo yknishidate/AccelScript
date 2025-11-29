@@ -1,6 +1,18 @@
 import React, { useEffect, useRef } from 'react';
-import { runtime, SharedArray, vec3f, vec4f, f32, Camera, u32 } from "@accelscript/runtime";
+import { runtime, SharedArray, vec3f, vec4f, f32, Camera, u32, SyncMode } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
+import { useUniforms, UniformControls } from '../hooks/useUniforms';
+
+const uniformsSchema = {
+    smoothingRadius: { value: 0.2, min: 0.05, max: 0.5, step: 0.01 },
+    restDensity: { value: 100.0, min: 10.0, max: 2000.0, step: 10.0 },
+    gasConstant: { value: 200.0, min: 10.0, max: 5000.0, step: 10.0 },
+    viscosity: { value: 0.1, min: 0.0, max: 10.0, step: 0.01 },
+    mass: { value: 0.5, min: 0.1, max: 10.0, step: 0.1 },
+    dt: { value: 0.01, min: 0.001, max: 0.1, step: 0.001 },
+    boundaryLimit: { value: 1.5, min: 0.5, max: 5.0, step: 0.1 },
+    gravity: { value: -9.8, min: -20.0, max: 20.0, step: 0.1 }
+};
 
 // SPH Parameters
 interface Params {
@@ -37,7 +49,7 @@ function viscosityKernelLap(dist: f32, h: f32): f32 {
     return (45.0 / (3.14159 * pow(h, 6.0))) * diff;
 }
 
-/** @kernel */
+/** @kernel @workgroup_size(64) */
 async function computeDensityPressure(
     pos: SharedArray<vec3f>,
     density: SharedArray<f32>,
@@ -68,7 +80,7 @@ async function computeDensityPressure(
     pressure[i] = params.gasConstant * (d - params.restDensity);
 }
 
-/** @kernel */
+/** @kernel @workgroup_size(64) */
 async function computeForces(
     pos: SharedArray<vec3f>,
     vel: SharedArray<vec3f>,
@@ -144,12 +156,11 @@ async function integrate(
 
     // Update velocity
     if (d > 0.001) {
-        // v = v + (f / d) * params.dt;
+        v = v + (f / d) * params.dt;
     }
 
     // Update position
-    // p = p + v * params.dt;
-    p.y -= 0.01;
+    p = p + v * params.dt;
 
     // Boundary conditions (Box -1 to 1)
     const limit = params.boundaryLimit;
@@ -171,6 +182,7 @@ async function integrate(
 export default function Fluid3D() {
     const { canvasRef, isReady } = useCanvas();
     const fpsRef = useRef<HTMLDivElement>(null);
+    const { uniforms, uiValues, setUniform, schema } = useUniforms(uniformsSchema);
 
     useEffect(() => {
         if (!isReady) return;
@@ -185,23 +197,24 @@ export default function Fluid3D() {
 
         const init = async () => {
             const NUM_PARTICLES = 1000;
-            const params = {
-                gravity: vec4f(0.0, -9.8, 0.0, 0.0),
+            // Initial params from uniforms
+            const initialParams = {
+                gravity: vec4f(0.0, uniforms.current.gravity, 0.0, 0.0),
                 numParticles: u32(NUM_PARTICLES),
-                smoothingRadius: f32(0.2),
-                restDensity: f32(1000.0),
-                gasConstant: f32(2000.0),
-                viscosity: f32(3.5),
-                mass: f32(2.5),
-                dt: f32(0.01),
-                boundaryLimit: f32(1.0)
+                smoothingRadius: f32(uniforms.current.smoothingRadius),
+                restDensity: f32(uniforms.current.restDensity),
+                gasConstant: f32(uniforms.current.gasConstant),
+                viscosity: f32(uniforms.current.viscosity),
+                mass: f32(uniforms.current.mass),
+                dt: f32(uniforms.current.dt),
+                boundaryLimit: f32(uniforms.current.boundaryLimit)
             };
 
-            const pos = new SharedArray(vec3f, NUM_PARTICLES);
-            const vel = new SharedArray(vec3f, NUM_PARTICLES);
-            const force = new SharedArray(vec3f, NUM_PARTICLES);
-            const density = new SharedArray(f32, NUM_PARTICLES);
-            const pressure = new SharedArray(f32, NUM_PARTICLES);
+            const pos = new SharedArray(vec3f, NUM_PARTICLES, SyncMode.None);
+            const vel = new SharedArray(vec3f, NUM_PARTICLES, SyncMode.None);
+            const force = new SharedArray(vec3f, NUM_PARTICLES, SyncMode.None);
+            const density = new SharedArray(f32, NUM_PARTICLES, SyncMode.None);
+            const pressure = new SharedArray(f32, NUM_PARTICLES, SyncMode.None);
 
             const sizes = new SharedArray(vec3f, NUM_PARTICLES);
             const colors = new SharedArray(vec3f, NUM_PARTICLES);
@@ -222,8 +235,19 @@ export default function Fluid3D() {
                     z + (Math.random() - 0.5) * 0.01
                 ]);
 
+                vel.set(i, [0.0, 0.0, 0.0]);
+                force.set(i, [0.0, 0.0, 0.0]);
+
                 sizes.set(i, [0.05, 0.05, 0.05]);
                 colors.set(i, [0.2, 0.5, 1.0]);
+            }
+
+            // Manually sync to device since we used SyncMode.None
+            if (runtime.device) {
+                await pos.syncToDevice(runtime.device);
+                await vel.syncToDevice(runtime.device);
+                await force.syncToDevice(runtime.device);
+                // density and pressure are computed on GPU, no need to sync
             }
 
             let frameCount = 0;
@@ -244,14 +268,27 @@ export default function Fluid3D() {
                     lastFpsTime = now;
                 }
 
+                // Update params from uniforms
+                const currentParams = {
+                    gravity: vec4f(0.0, uniforms.current.gravity, 0.0, 0.0),
+                    numParticles: u32(NUM_PARTICLES),
+                    smoothingRadius: f32(uniforms.current.smoothingRadius),
+                    restDensity: f32(uniforms.current.restDensity),
+                    gasConstant: f32(uniforms.current.gasConstant),
+                    viscosity: f32(uniforms.current.viscosity),
+                    mass: f32(uniforms.current.mass),
+                    dt: f32(uniforms.current.dt),
+                    boundaryLimit: f32(uniforms.current.boundaryLimit)
+                };
+
                 // Simulation steps
+                const groupCount: u32 = Math.ceil(currentParams.numParticles / 64);
                 // @ts-ignore
-                // await computeDensityPressure(pos, density, pressure, params);
+                await computeDensityPressure<[groupCount, 1, 1]>(pos, density, pressure, currentParams);
                 // @ts-ignore
-                // await computeForces(pos, vel, density, pressure, force, params);
+                await computeForces<[groupCount, 1, 1]>(pos, vel, density, pressure, force, currentParams);
                 // @ts-ignore
-                const groupCount: u32 = Math.ceil(params.numParticles / 64);
-                await integrate<[groupCount, 1, 1]>(pos, vel, force, density, params);
+                await integrate<[groupCount, 1, 1]>(pos, vel, force, density, currentParams);
 
                 // Render
                 runtime.clear([0.1, 0.1, 0.1, 1.0], 1.0);
@@ -269,7 +306,7 @@ export default function Fluid3D() {
             animating = false;
             camera.detach();
         };
-    }, [isReady]);
+    }, [isReady, uiValues]); // Re-run when uiValues change (reset)
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -291,6 +328,12 @@ export default function Fluid3D() {
             >
                 FPS: 0
             </div>
+            <UniformControls
+                schema={schema}
+                values={uiValues}
+                onChange={setUniform}
+                style={{ left: 'auto', right: '10px' }}
+            />
             <canvas
                 ref={canvasRef}
                 width={800}
