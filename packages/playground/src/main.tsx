@@ -6,13 +6,15 @@ import Lines from './demos/Lines.gen'
 import ImageDemo from './demos/ImageDemo.gen'
 import RayTracing from './demos/RayTracing.gen'
 
+import Fluid3D from './demos/Fluid3D.gen'
+
 import Rectangles from './demos/Rectangles.gen'
 import { PrimitiveDemo } from './demos/PrimitiveDemo'
 
 import './index.css'
 
 function Layout() {
-    const [demo, setDemo] = useState<"triangle" | "circles" | "lines" | "image" | "raytracing" | "rectangles" | "primitives">("primitives");
+    const [demo, setDemo] = useState<"triangle" | "circles" | "lines" | "image" | "raytracing" | "rectangles" | "primitives" | "fluid3d">("fluid3d");
 
     const demos = [
         { id: "triangle", label: "Triangle", description: "Basic graphics rendering" },
@@ -22,6 +24,7 @@ function Layout() {
         { id: "image", label: "Image Processing", description: "Image manipulation filters" },
         { id: "raytracing", label: "Ray Tracing", description: "Simple sphere ray tracing" },
         { id: "primitives", label: "Primitives", description: "Primitive rendering demo" },
+        { id: "fluid3d", label: "Fluid 3D", description: "SPH Fluid Simulation" },
     ] as const;
 
     const currentDemo = demos.find(d => d.id === demo);
@@ -60,6 +63,7 @@ function Layout() {
                     {demo === "image" && <ImageDemo />}
                     {demo === "raytracing" && <RayTracing />}
                     {demo === "primitives" && <PrimitiveDemo />}
+                    {demo === "fluid3d" && <Fluid3D />}
                 </div>
             </main>
         </div>

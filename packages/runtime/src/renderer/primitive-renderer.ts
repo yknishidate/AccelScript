@@ -14,7 +14,6 @@ export class PrimitiveRenderer {
     private device: GPUDevice;
     private presentationFormat: GPUTextureFormat;
 
-
     private sphereVertexBuffer: GPUBuffer | null = null;
     private sphereIndexBuffer: GPUBuffer | null = null;
     private sphereIndexCount: number = 0;
@@ -26,6 +25,8 @@ export class PrimitiveRenderer {
     private planeVertexBuffer: GPUBuffer | null = null;
     private planeIndexBuffer: GPUBuffer | null = null;
     private planeIndexCount: number = 0;
+
+    private defaultRotationBuffer: GPUBuffer | null = null;
 
     constructor(device: GPUDevice, presentationFormat: GPUTextureFormat) {
         this.device = device;
@@ -223,33 +224,51 @@ struct VertexOutput {
     @location(2) worldPos: vec3<f32>,
 }
 
-struct Instance {
-    center: vec3<f32>,
-    size: vec3<f32>, // radius (uniform) or half-extents (non-uniform)
-    rotation: vec3<f32>, // Euler angles (x, y, z)
-    color: vec4<f32>,
-}
-
 struct Globals {
     view: mat4x4<f32>,
     projection: mat4x4<f32>,
 }
 
-@group(0) @binding(0) var<storage, read> instances: array<Instance>;
-@group(0) @binding(1) var<uniform> globals: Globals;
+@group(0) @binding(0) var<storage, read> centers: array<f32>;
+@group(0) @binding(1) var<storage, read> sizes: array<f32>;
+@group(0) @binding(2) var<storage, read> rotations: array<f32>;
+@group(0) @binding(3) var<storage, read> colors: array<f32>;
+@group(0) @binding(4) var<uniform> globals: Globals;
 
 @vertex
 fn vs_main(input: VertexInput, @builtin(instance_index) instanceIndex: u32) -> VertexOutput {
     var output: VertexOutput;
     
-    let instance = instances[instanceIndex];
+    // Read Center (vec3f)
+    let cx = centers[instanceIndex * 3 + 0];
+    let cy = centers[instanceIndex * 3 + 1];
+    let cz = centers[instanceIndex * 3 + 2];
+    let center = vec3<f32>(cx, cy, cz);
+
+    // Read Size (vec3f)
+    let sx = sizes[instanceIndex * 3 + 0];
+    let sy = sizes[instanceIndex * 3 + 1];
+    let sz = sizes[instanceIndex * 3 + 2];
+    let size = vec3<f32>(sx, sy, sz);
+
+    // Read Rotation (vec3f)
+    let rx = rotations[instanceIndex * 3 + 0];
+    let ry = rotations[instanceIndex * 3 + 1];
+    let rz = rotations[instanceIndex * 3 + 2];
+    let rotation = vec3<f32>(rx, ry, rz);
+
+    // Read Color (vec3f)
+    let r = colors[instanceIndex * 3 + 0];
+    let g = colors[instanceIndex * 3 + 1];
+    let b = colors[instanceIndex * 3 + 2];
+    let color = vec4<f32>(r, g, b, 1.0);
     
     // Scale position by size
-    var pos = input.position * instance.size;
+    var pos = input.position * size;
 
     // Apply rotation (Euler angles)
-    let c = cos(instance.rotation);
-    let s = sin(instance.rotation);
+    let c = cos(rotation);
+    let s = sin(rotation);
 
     // Rotate X
     let y1 = pos.y * c.x - pos.z * s.x;
@@ -269,10 +288,10 @@ fn vs_main(input: VertexInput, @builtin(instance_index) instanceIndex: u32) -> V
     pos.x = x3;
     pos.y = y3;
 
-    let worldPos = instance.center + pos;
+    let worldPos = center + pos;
     
     output.position = globals.projection * globals.view * vec4<f32>(worldPos, 1.0);
-    output.color = instance.color;
+    output.color = color;
     
     // Rotate normal
     var norm = input.normal;
@@ -370,103 +389,37 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
     async draw(
         context: GPUCanvasContext,
-        centers: SharedArray,
-        sizes: SharedArray, // vec3 (radius/half-extents)
-        colors: SharedArray,
+        centers: SharedArray<vec3f>,
+        sizes: SharedArray<vec3f>,
+        colors: SharedArray<vec3f>,
         type: PrimitiveType,
         depthTexture: GPUTexture,
-        options: { aspect?: number, camera?: Camera, clearDepth?: boolean, rotations?: SharedArray } = {}
+        options: { aspect?: number, camera?: Camera, clearDepth?: boolean, rotations?: SharedArray<vec3f> } = {}
     ) {
         const clearDepth = options.clearDepth ?? false;
         const rotations = options.rotations;
         const numPrims = centers.data.length / 3;
 
-        if (sizes.data.length !== numPrims * 3 && sizes.data.length !== numPrims && sizes.data.length !== 1 && sizes.data.length !== 3) {
-            throw new Error(`sizes length must be numPrims*3, numPrims, 1, or 3`);
-        }
+        // Ensure buffers exist
+        const centerBuffer = await centers.ensureBuffer(this.device);
+        const sizeBuffer = await sizes.ensureBuffer(this.device);
+        const colorBuffer = await colors.ensureBuffer(this.device);
 
-        if (rotations && rotations.data.length !== numPrims * 3) {
-            throw new Error(`rotations length must be numPrims*3`);
-        }
-
-        const isColorVec4 = colors.data.length === numPrims * 4;
-        const isSizeScalar = sizes.data.length === numPrims;
-
-        let singleSize: Float32Array | null = null;
-        if (sizes.data.length === 1) {
-            singleSize = new Float32Array([sizes.data[0], sizes.data[0], sizes.data[0]]);
-        } else if (sizes.data.length === 3) {
-            singleSize = sizes.data as Float32Array;
-        }
-
-        // Pack instance data: 
-        // center (12) + pad (4)
-        // size (12) + pad (4)
-        // rotation (12) + pad (4)
-        // color (16)
-        // Total 64 bytes
-        const stride = 16; // floats
-        const instanceData = new Float32Array(numPrims * stride);
-        for (let i = 0; i < numPrims; i++) {
-            const base = i * stride;
-
-            // Center
-            instanceData[base + 0] = centers.data[i * 3 + 0];
-            instanceData[base + 1] = centers.data[i * 3 + 1];
-            instanceData[base + 2] = centers.data[i * 3 + 2];
-            // Padding at +3
-
-            // Size
-            if (singleSize) {
-                instanceData[base + 4] = singleSize[0];
-                instanceData[base + 5] = singleSize[1];
-                instanceData[base + 6] = singleSize[2];
-            } else if (isSizeScalar) {
-                const s = sizes.data[i];
-                instanceData[base + 4] = s;
-                instanceData[base + 5] = s;
-                instanceData[base + 6] = s;
-            } else {
-                instanceData[base + 4] = sizes.data[i * 3 + 0];
-                instanceData[base + 5] = sizes.data[i * 3 + 1];
-                instanceData[base + 6] = sizes.data[i * 3 + 2];
+        let rotationBuffer: GPUBuffer;
+        if (rotations) {
+            rotationBuffer = await rotations.ensureBuffer(this.device);
+        } else {
+            // Create a default zero buffer if not present
+            if (!this.defaultRotationBuffer || this.defaultRotationBuffer.size < numPrims * 3 * 4) {
+                if (this.defaultRotationBuffer) this.defaultRotationBuffer.destroy();
+                this.defaultRotationBuffer = this.device.createBuffer({
+                    size: Math.max(16, numPrims * 3 * 4), // Ensure at least 16 bytes
+                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                });
+                // Zero initialized by default creation
             }
-            // Padding at +7
-
-            // Rotation
-            if (rotations) {
-                instanceData[base + 8] = rotations.data[i * 3 + 0];
-                instanceData[base + 9] = rotations.data[i * 3 + 1];
-                instanceData[base + 10] = rotations.data[i * 3 + 2];
-            } else {
-                instanceData[base + 8] = 0;
-                instanceData[base + 9] = 0;
-                instanceData[base + 10] = 0;
-            }
-            // Padding at +11
-
-            // Color
-            if (isColorVec4) {
-                instanceData[base + 12] = colors.data[i * 4 + 0];
-                instanceData[base + 13] = colors.data[i * 4 + 1];
-                instanceData[base + 14] = colors.data[i * 4 + 2];
-                instanceData[base + 15] = colors.data[i * 4 + 3];
-            } else {
-                instanceData[base + 12] = colors.data[i * 3 + 0];
-                instanceData[base + 13] = colors.data[i * 3 + 1];
-                instanceData[base + 14] = colors.data[i * 3 + 2];
-                instanceData[base + 15] = 1.0;
-            }
+            rotationBuffer = this.defaultRotationBuffer;
         }
-
-        const instanceBuffer = this.device.createBuffer({
-            size: instanceData.byteLength,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-            mappedAtCreation: true,
-            label: "Instance Buffer",
-        });
-        new Float32Array(instanceBuffer.getMappedRange()).set(instanceData);
-        instanceBuffer.unmap();
 
         // Matrices
         const aspect = options.aspect ?? (context.canvas.width / context.canvas.height);
@@ -475,18 +428,14 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
         if (options.camera) {
             const cam = options.camera;
-            viewMatrix = lookAt(
-                cam.pos,
-                cam.center,
-                cam.up
-            );
+            viewMatrix = lookAt(cam.pos, cam.center, cam.up);
             projectionMatrix = perspective(Math.PI / 4, aspect, 0.1, 100.0);
         } else {
             viewMatrix = lookAt(vec3f(0, 0, 2), vec3f(0, 0, 0), vec3f(0, 1, 0));
             projectionMatrix = perspective(Math.PI / 4, aspect, 0.1, 100.0);
         }
 
-        const uniformSize = 16 * 4 * 2;
+        const uniformSize = 16 * 4 * 2 + 16; // mat4 * 2 + pad
         const uniformBuffer = this.device.createBuffer({
             size: uniformSize,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
@@ -502,19 +451,13 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         const bindGroup = this.device.createBindGroup({
             layout: pipeline.getBindGroupLayout(0),
             entries: [
-                {
-                    binding: 0,
-                    resource: { buffer: instanceBuffer },
-                },
-                {
-                    binding: 1,
-                    resource: { buffer: uniformBuffer },
-                }
+                { binding: 0, resource: { buffer: centerBuffer } },
+                { binding: 1, resource: { buffer: sizeBuffer } },
+                { binding: 2, resource: { buffer: rotationBuffer } },
+                { binding: 3, resource: { buffer: colorBuffer } },
+                { binding: 4, resource: { buffer: uniformBuffer } },
             ],
         });
-
-        // Depth texture passed in
-
 
         const commandEncoder = this.device.createCommandEncoder();
         const textureView = context.getCurrentTexture().createView();
@@ -565,7 +508,6 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
 
         this.device.queue.submit([commandEncoder.finish()]);
 
-        instanceBuffer.destroy();
         uniformBuffer.destroy();
     }
 }
