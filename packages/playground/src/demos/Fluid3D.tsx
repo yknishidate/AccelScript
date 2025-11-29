@@ -122,7 +122,7 @@ async function computeForces(
     force[i] = pressureForce + viscosityForce + params.gravity.xyz * di; // Gravity applied as body force density
 }
 
-/** @kernel */
+/** @kernel @workgroup_size(64) */
 async function integrate(
     pos: SharedArray<vec3f>,
     vel: SharedArray<vec3f>,
@@ -144,11 +144,12 @@ async function integrate(
 
     // Update velocity
     if (d > 0.001) {
-        v = v + (f / d) * params.dt;
+        // v = v + (f / d) * params.dt;
     }
 
     // Update position
-    p = p + v * params.dt;
+    // p = p + v * params.dt;
+    p.y -= 0.01;
 
     // Boundary conditions (Box -1 to 1)
     const limit = params.boundaryLimit;
@@ -249,7 +250,8 @@ export default function Fluid3D() {
                 // @ts-ignore
                 // await computeForces(pos, vel, density, pressure, force, params);
                 // @ts-ignore
-                // await integrate(pos, vel, force, density, params);
+                const groupCount: u32 = Math.ceil(params.numParticles / 64);
+                await integrate<[groupCount, 1, 1]>(pos, vel, force, density, params);
 
                 // Render
                 runtime.clear([0.1, 0.1, 0.1, 1.0], 1.0);

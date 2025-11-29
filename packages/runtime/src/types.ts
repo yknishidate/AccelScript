@@ -234,9 +234,15 @@ const createType = <T extends TypedArray>(
 };
 
 // Primitives
-export const u32 = createType('u32', 1, 4, Uint32Array, (v) => ({ type: 'u32', value: v }));
-export const i32 = createType('i32', 1, 4, Int32Array, (v) => ({ type: 'i32', value: v }));
-export const f32 = createType('f32', 1, 4, Float32Array, (v) => ({ type: 'f32', value: v }));
+const createScalar = (type: string) => (v: number) => ({
+    type,
+    value: v,
+    valueOf() { return this.value; }
+});
+
+export const u32 = createType('u32', 1, 4, Uint32Array, createScalar('u32'));
+export const i32 = createType('i32', 1, 4, Int32Array, createScalar('i32'));
+export const f32 = createType('f32', 1, 4, Float32Array, createScalar('f32'));
 
 // Float Vectors
 export const vec2f = createType('vec2f', 2, 4, Float32Array, (x, y) => new Float32Array([x, y]));
