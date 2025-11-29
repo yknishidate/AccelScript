@@ -44,7 +44,10 @@ export function generateDeviceFunction(func: FunctionDeclaration): string {
             throw new Error(`Device function '${name}' parameter '${n}' must have explicit type (e.g. f32, i32, u32), not 'number'`);
         }
 
-        const type = mapType(typeText);
+        let type = mapType(typeText);
+        if (type.startsWith("array<")) {
+            type = `ptr<storage, ${type}, read_write>`;
+        }
         return `${n} : ${type}`;
     }).join(", ");
 
