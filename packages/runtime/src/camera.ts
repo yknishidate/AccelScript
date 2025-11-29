@@ -1,7 +1,7 @@
 import { add, sub, mul, normalize, cross } from './math';
 
 export class Camera {
-    azimuth = -1.57;
+    azimuth = 0;
     elevation = 0.0;
     distance = 5.0;
     center = new Float32Array([0, 0, 0]);

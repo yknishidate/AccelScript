@@ -64,7 +64,7 @@ function intersectScene(ro: vec3, rd: vec3): HitResult {
     result.pos = vec3(0.0, 0.0, 0.0);
 
     // Sphere 1 (Center, Diffuse)
-    let center = vec3(0.0, 0.0, -1.0); // Moved slightly back to be visible
+    let center = vec3(0.0, 0.0, 1.0); // Moved slightly back to be visible
     let t = intersectSphere(ro, rd, center, 0.5);
     if (t > 0.001 && (result.t < 0.0 || t < result.t)) {
         result.t = t;
@@ -75,8 +75,8 @@ function intersectScene(ro: vec3, rd: vec3): HitResult {
     }
 
     // Sphere 2 (Ground)
-    center = vec3(0.0, -100.5, -1.0);
-    t = intersectSphere(ro, rd, center, 100.0);
+    center = vec3(0.0, -1000.5, 1.0);
+    t = intersectSphere(ro, rd, center, 1000.0);
     if (t > 0.001 && (result.t < 0.0 || t < result.t)) {
         result.t = t;
         result.pos = ro + rd * t;
@@ -86,7 +86,7 @@ function intersectScene(ro: vec3, rd: vec3): HitResult {
     }
 
     // Sphere 3 (Left, Metal)
-    center = vec3(-1.0, 0.0, -1.0);
+    center = vec3(-1.0, 0.0, 1.0);
     t = intersectSphere(ro, rd, center, 0.5);
     if (t > 0.001 && (result.t < 0.0 || t < result.t)) {
         result.t = t;
@@ -98,7 +98,7 @@ function intersectScene(ro: vec3, rd: vec3): HitResult {
     }
 
     // Sphere 4 (Right, Emissive)
-    center = vec3(1.0, 0.0, -1.0);
+    center = vec3(1.0, 0.0, 1.0);
     t = intersectSphere(ro, rd, center, 0.5);
     if (t > 0.001 && (result.t < 0.0 || t < result.t)) {
         result.t = t;
@@ -137,8 +137,8 @@ async function compute(image: SharedArray<vec4f>, params: Params) {
     // Camera
     const ro = params.cameraPos.xyz;
     const camDir = normalize(params.cameraDir.xyz);
-    const camRight = normalize(cross(vec3(0.0, 1.0, 0.0), camDir));
-    const camUp = cross(camDir, camRight);
+    const camRight = normalize(cross(camDir, vec3(0.0, 1.0, 0.0)));
+    const camUp = cross(camRight, camDir);
 
     const rd = normalize(p.x * camRight + p.y * camUp + camDir);
 
