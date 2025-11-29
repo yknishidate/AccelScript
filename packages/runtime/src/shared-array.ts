@@ -1,6 +1,7 @@
 import { TypedArray, TypedArrayConstructor, TypeSpec, f32 } from './types';
 
 export class SharedArray<T = any> {
+    [index: number]: any;
     private hostData: TypedArray;
     private deviceBuffer: GPUBuffer | null = null;
     private device: GPUDevice | null = null;
@@ -63,6 +64,40 @@ export class SharedArray<T = any> {
                 this.ndim = 1;
             }
         }
+
+        // Return a Proxy to handle index access
+        return new Proxy(this, {
+            get: (target, prop, receiver) => {
+                // Check if prop is an integer index
+                if (typeof prop === 'string' && !isNaN(Number(prop))) {
+                    const index = Number(prop);
+                    if (Number.isInteger(index) && index >= 0 && index < target.size) {
+                        const start = index * target.type.components;
+                        const end = start + target.type.components;
+                        return target.hostData.subarray(start, end);
+                    }
+                }
+                return Reflect.get(target, prop, receiver);
+            },
+            set: (target, prop, value, receiver) => {
+                // Check if prop is an integer index
+                if (typeof prop === 'string' && !isNaN(Number(prop))) {
+                    const index = Number(prop);
+                    if (Number.isInteger(index) && index >= 0 && index < target.size) {
+                        const start = index * target.type.components;
+
+                        // Handle TypedArray (e.g. vec3f) or Array
+                        if (value.length !== undefined && value.length === target.type.components) {
+                            target.hostData.set(value, start);
+                            return true;
+                        } else {
+                            console.warn(`Invalid value for SharedArray assignment at index ${index}. Expected length ${target.type.components}, got ${value.length}`);
+                        }
+                    }
+                }
+                return Reflect.set(target, prop, value, receiver);
+            }
+        }) as any as SharedArray<T>;
     }
 
     /**
