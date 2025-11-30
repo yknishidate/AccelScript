@@ -1,21 +1,26 @@
 import React, { useEffect, useRef } from 'react';
-import { runtime, SharedArray, vec3f, vec4f, f32, Camera, u32, SyncMode } from "@accelscript/runtime";
+import { runtime, SharedArray, vec3f, vec4f, vec4i, f32, i32, u32, Camera, SyncMode, Atomic } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
 import { useUniforms, UniformControls } from '../hooks/useUniforms';
 
 const uniformsSchema = {
-    smoothingRadius: { value: 0.2, min: 0.05, max: 0.5, step: 0.01 },
-    restDensity: { value: 100.0, min: 10.0, max: 200.0, step: 10.0 },
+    smoothingRadius: { value: 0.4, min: 0.2, max: 1.0, step: 0.05 },
+    restDensity: { value: 70.0, min: 10.0, max: 200.0, step: 10.0 },
     gasConstant: { value: 100.0, min: 10.0, max: 500.0, step: 10.0 },
-    viscosity: { value: 3.0, min: 0.0, max: 10.0, step: 0.1 },
+    viscosity: { value: 30.0, min: 0.0, max: 60.0, step: 0.1 },
     mass: { value: 0.5, min: 0.1, max: 5.0, step: 0.1 },
-    dt: { value: 0.01, min: 0.001, max: 0.1, step: 0.001 },
-    boundaryLimit: { value: 3.0, min: 0.5, max: 5.0, step: 0.1 },
+    dt: { value: 0.02, min: 0.01, max: 0.03, step: 0.001 },
+    boundaryX: { value: 8.0, min: 0.5, max: 20.0, step: 0.1 },
+    boundaryY: { value: 6.0, min: 0.5, max: 20.0, step: 0.1 },
+    boundaryZ: { value: 2.5, min: 0.5, max: 20.0, step: 0.1 },
 };
 
 // SPH Parameters
 interface Params {
     gravity: vec4f;
+    boundaryLimit: vec4f; // Using vec4f for alignment safety
+    gridRes: vec4i; // Grid resolution (x, y, z, padding)
+    cellSize: f32;
     numParticles: u32;
     smoothingRadius: f32;
     restDensity: f32;
@@ -23,7 +28,6 @@ interface Params {
     viscosity: f32;
     mass: f32;
     dt: f32;
-    boundaryLimit: f32;
 }
 
 /** @device */
@@ -48,9 +52,61 @@ function viscosityKernelLap(dist: f32, h: f32): f32 {
     return (45.0 / (3.14159 * pow(h, 6.0))) * diff;
 }
 
+/** @device */
+function getCellIndex(pos: vec3f, cellSize: f32, gridRes: vec4i, offset: vec3f): i32 {
+    const cellX = i32(floor((pos.x + offset.x) / cellSize));
+    const cellY = i32(floor((pos.y + offset.y) / cellSize));
+    const cellZ = i32(floor((pos.z + offset.z) / cellSize));
+
+    // Clamp to grid bounds
+    const cx = clamp(cellX, 0, gridRes.x - 1);
+    const cy = clamp(cellY, 0, gridRes.y - 1);
+    const cz = clamp(cellZ, 0, gridRes.z - 1);
+
+    return cx + cy * gridRes.x + cz * gridRes.x * gridRes.y;
+}
+
+/** @kernel @workgroup_size(4, 4, 4) */
+async function resetGrid(
+    gridHead: SharedArray<Atomic<i32>>,
+    params: Params
+) {
+    const x = global_invocation_id.x;
+    const y = global_invocation_id.y;
+    const z = global_invocation_id.z;
+
+    if (x >= u32(params.gridRes.x) || y >= u32(params.gridRes.y) || z >= u32(params.gridRes.z)) return;
+
+    const index = x + y * u32(params.gridRes.x) + z * u32(params.gridRes.x) * u32(params.gridRes.y);
+    // @ts-ignore
+    atomicStore(gridHead[index], -1);
+}
+
+/** @kernel @workgroup_size(64) */
+async function updateGrid(
+    pos: SharedArray<vec3f>,
+    gridHead: SharedArray<Atomic<i32>>,
+    gridNext: SharedArray<i32>,
+    params: Params
+) {
+    const i = global_invocation_id.x;
+    if (i >= params.numParticles) return;
+
+    // @ts-ignore
+    const p = pos[i];
+    const cellIndex = getCellIndex(p, params.cellSize, params.gridRes, params.boundaryLimit.xyz);
+
+    // @ts-ignore
+    const next = atomicExchange(gridHead[cellIndex], i32(i));
+    // @ts-ignore
+    gridNext[i] = next;
+}
+
 /** @kernel @workgroup_size(64) */
 async function computeDensityPressure(
     pos: SharedArray<vec3f>,
+    gridHead: SharedArray<Atomic<i32>>,
+    gridNext: SharedArray<i32>,
     density: SharedArray<f32>,
     pressure: SharedArray<f32>,
     params: Params
@@ -62,14 +118,41 @@ async function computeDensityPressure(
     const pi = pos[i];
     let d = 0.0;
 
-    for (let j: u32 = 0; j < params.numParticles; j++) {
-        // @ts-ignore
-        const pj = pos[j];
-        const r = pi - pj;
-        const r2 = dot(r, r);
+    const cellIndex = getCellIndex(pi, params.cellSize, params.gridRes, params.boundaryLimit.xyz);
+    const cx = cellIndex % params.gridRes.x;
+    const cy = (cellIndex / params.gridRes.x) % params.gridRes.y;
+    const cz = cellIndex / (params.gridRes.x * params.gridRes.y);
 
-        if (r2 < params.smoothingRadius * params.smoothingRadius) {
-            d = d + params.mass * poly6Kernel(r2, params.smoothingRadius);
+    for (let z = -1; z <= 1; z++) {
+        for (let y = -1; y <= 1; y++) {
+            for (let x = -1; x <= 1; x++) {
+                const nx = cx + x;
+                const ny = cy + y;
+                const nz = cz + z;
+
+                if (nx >= 0 && nx < params.gridRes.x &&
+                    ny >= 0 && ny < params.gridRes.y &&
+                    nz >= 0 && nz < params.gridRes.z) {
+
+                    const neighborCellIndex = nx + ny * params.gridRes.x + nz * params.gridRes.x * params.gridRes.y;
+                    // @ts-ignore
+                    let j = atomicLoad(gridHead[neighborCellIndex]);
+
+                    while (j != -1) {
+                        // @ts-ignore
+                        const pj = pos[j];
+                        const r = pi - pj;
+                        const r2 = dot(r, r);
+
+                        if (r2 < params.smoothingRadius * params.smoothingRadius) {
+                            d = d + params.mass * poly6Kernel(r2, params.smoothingRadius);
+                        }
+
+                        // @ts-ignore
+                        j = gridNext[j];
+                    }
+                }
+            }
         }
     }
 
@@ -83,6 +166,8 @@ async function computeDensityPressure(
 async function computeForces(
     pos: SharedArray<vec3f>,
     vel: SharedArray<vec3f>,
+    gridHead: SharedArray<Atomic<i32>>,
+    gridNext: SharedArray<i32>,
     density: SharedArray<f32>,
     pressure: SharedArray<f32>,
     force: SharedArray<vec3f>,
@@ -103,27 +188,58 @@ async function computeForces(
     let pressureForce = vec3f(0.0, 0.0, 0.0);
     let viscosityForce = vec3f(0.0, 0.0, 0.0);
 
-    for (let j: u32 = 0; j < params.numParticles; j++) {
-        if (i == j) continue;
+    const cellIndex = getCellIndex(pi, params.cellSize, params.gridRes, params.boundaryLimit.xyz);
+    const cx = cellIndex % params.gridRes.x;
+    const cy = (cellIndex / params.gridRes.x) % params.gridRes.y;
+    const cz = cellIndex / (params.gridRes.x * params.gridRes.y);
 
-        // @ts-ignore
-        const pj = pos[j];
-        // @ts-ignore
-        const vj = vel[j];
-        // @ts-ignore
-        const dj = density[j];
-        // @ts-ignore
-        const prj = pressure[j];
+    for (let z = -1; z <= 1; z++) {
+        for (let y = -1; y <= 1; y++) {
+            for (let x = -1; x <= 1; x++) {
+                const nx = cx + x;
+                const ny = cy + y;
+                const nz = cz + z;
 
-        const r = pi - pj;
-        const dist = length(r);
+                if (nx >= 0 && nx < params.gridRes.x &&
+                    ny >= 0 && ny < params.gridRes.y &&
+                    nz >= 0 && nz < params.gridRes.z) {
 
-        if (dist < params.smoothingRadius) {
-            const grad = spikyKernelGrad(r, dist, params.smoothingRadius);
-            pressureForce = pressureForce - grad * (params.mass * (pri + prj) / (2.0 * dj));
+                    const neighborCellIndex = nx + ny * params.gridRes.x + nz * params.gridRes.x * params.gridRes.y;
+                    // @ts-ignore
+                    let j = atomicLoad(gridHead[neighborCellIndex]);
 
-            const lap = viscosityKernelLap(dist, params.smoothingRadius);
-            viscosityForce = viscosityForce + (vj - vi) * (lap * (params.mass / dj));
+                    while (j != -1) {
+                        if (i == u32(j)) {
+                            // @ts-ignore
+                            j = gridNext[j];
+                            continue;
+                        }
+
+                        // @ts-ignore
+                        const pj = pos[j];
+                        // @ts-ignore
+                        const vj = vel[j];
+                        // @ts-ignore
+                        const dj = density[j];
+                        // @ts-ignore
+                        const prj = pressure[j];
+
+                        const r = pi - pj;
+                        const dist = length(r);
+
+                        if (dist < params.smoothingRadius) {
+                            const grad = spikyKernelGrad(r, dist, params.smoothingRadius);
+                            pressureForce = pressureForce - grad * (params.mass * (pri + prj) / (2.0 * dj));
+
+                            const lap = viscosityKernelLap(dist, params.smoothingRadius);
+                            viscosityForce = viscosityForce + (vj - vi) * (lap * (params.mass / dj));
+                        }
+
+                        // @ts-ignore
+                        j = gridNext[j];
+                    }
+                }
+            }
         }
     }
 
@@ -161,16 +277,16 @@ async function integrate(
     // Update position
     p = p + v * params.dt;
 
-    // Boundary conditions (Box -1 to 1)
+    // Boundary conditions (Box)
     const limit = params.boundaryLimit;
     const damping = -0.5;
 
-    if (p.x < -limit) { p.x = -limit; v.x = v.x * damping; }
-    if (p.x > limit) { p.x = limit; v.x = v.x * damping; }
-    if (p.y < -limit) { p.y = -limit; v.y = v.y * damping; }
-    if (p.y > limit) { p.y = limit; v.y = v.y * damping; }
-    if (p.z < -limit) { p.z = -limit; v.z = v.z * damping; }
-    if (p.z > limit) { p.z = limit; v.z = v.z * damping; }
+    if (p.x < -limit.x) { p.x = -limit.x; v.x = v.x * damping; }
+    if (p.x > limit.x) { p.x = limit.x; v.x = v.x * damping; }
+    if (p.y < -limit.y) { p.y = -limit.y; v.y = v.y * damping; }
+    // if (p.y > limit.y) { p.y = limit.y; v.y = v.y * damping; } // Open top
+    if (p.z < -limit.z) { p.z = -limit.z; v.z = v.z * damping; }
+    if (p.z > limit.z) { p.z = limit.z; v.z = v.z * damping; }
 
     // @ts-ignore
     pos[i] = p;
@@ -191,14 +307,14 @@ export default function Fluid3D() {
         const canvas = canvasRef.current;
         if (canvas) {
             camera.attach(canvas);
-            camera.distance = 12;
+            camera.distance = 30;
             camera.azimuth = 0.2;
-            camera.center = vec3f(-uniforms.current.boundaryLimit * 0.25, 0, 0);
+            camera.center = vec3f(-uniforms.current.boundaryX * 0.25, 0, 0);
             camera.update();
         }
 
         const init = async () => {
-            const NUM_PARTICLES = 4096;
+            const NUM_PARTICLES = 100000;
             const pos = new SharedArray(vec3f, NUM_PARTICLES, SyncMode.None);
             const vel = new SharedArray(vec3f, NUM_PARTICLES, SyncMode.None);
             const force = new SharedArray(vec3f, NUM_PARTICLES, SyncMode.None);
@@ -207,19 +323,37 @@ export default function Fluid3D() {
             const sizes = new SharedArray(vec3f, NUM_PARTICLES);
             const colors = new SharedArray(vec3f, NUM_PARTICLES);
 
+            // Grid Initialization
+            const boundsX = uniforms.current.boundaryX;
+            const boundsY = uniforms.current.boundaryY;
+            const boundsZ = uniforms.current.boundaryZ;
+            const CELL_SIZE = uniforms.current.smoothingRadius; // Should match smoothingRadius
+            const GRID_RES_X = Math.ceil((boundsX * 2.0) / CELL_SIZE);
+            const GRID_RES_Y = Math.ceil((boundsY * 2.0) / CELL_SIZE);
+            const GRID_RES_Z = Math.ceil((boundsZ * 2.0) / CELL_SIZE);
+            const NUM_CELLS = GRID_RES_X * GRID_RES_Y * GRID_RES_Z;
+
+            // Atomic<i32> for grid head, initialized to -1
+            const gridHead = new SharedArray(i32, NUM_CELLS, SyncMode.None);
+            const gridNext = new SharedArray(i32, NUM_PARTICLES, SyncMode.None);
+
+            // Initialize gridHead to -1
+            for (let i = 0; i < NUM_CELLS; i++) {
+                gridHead.set(i, [-1]);
+            }
+
             // Initialize particles in a block (Dam Break)
-            const bounds = uniforms.current.boundaryLimit;
-            const spacing = 0.2; // Fixed spacing for liquid behavior
+            const spacing = 0.15; // Fixed spacing for liquid behavior
 
             // Start from the corner of the boundary
-            const startX = -bounds + spacing / 2;
-            const startY = -bounds + spacing / 2;
-            const startZ = -bounds + spacing / 2;
+            const startX = -boundsX + spacing / 2;
+            const startY = -boundsY + spacing / 2;
+            const startZ = -boundsZ + spacing / 2;
 
             // Calculate dimensions of the dam column (Left 25% of width)
-            const damWidth = (bounds * 2) * 0.25;
+            const damWidth = (boundsX * 2) * 0.33;
             const countX = Math.floor(damWidth / spacing);
-            const countZ = Math.floor((bounds * 2) / spacing);
+            const countZ = Math.floor((boundsZ * 2) / spacing);
 
             for (let i = 0; i < NUM_PARTICLES; i++) {
                 const iz = i % countZ;
@@ -241,6 +375,8 @@ export default function Fluid3D() {
 
                 sizes.set(i, [0.07, 0.07, 0.07]);
                 colors.set(i, [0.2, 0.5, 1.0]);
+
+                gridNext.set(i, [-1]);
             }
 
             // Manually sync to device since we used SyncMode.None
@@ -248,6 +384,8 @@ export default function Fluid3D() {
                 await pos.syncToDevice(runtime.device);
                 await vel.syncToDevice(runtime.device);
                 await force.syncToDevice(runtime.device);
+                await gridHead.syncToDevice(runtime.device);
+                await gridNext.syncToDevice(runtime.device);
                 // density and pressure are computed on GPU, no need to sync
             }
 
@@ -272,24 +410,44 @@ export default function Fluid3D() {
                 // Update params from uniforms
                 const currentParams = {
                     gravity: vec4f(0.0, -9.8, 0.0, 0.0),
+                    boundaryLimit: vec4f(uniforms.current.boundaryX, uniforms.current.boundaryY, uniforms.current.boundaryZ, 0.0),
+                    gridRes: vec4i(GRID_RES_X, GRID_RES_Y, GRID_RES_Z, 0),
+                    cellSize: f32(CELL_SIZE),
                     numParticles: u32(NUM_PARTICLES),
                     smoothingRadius: f32(uniforms.current.smoothingRadius),
                     restDensity: f32(uniforms.current.restDensity),
                     gasConstant: f32(uniforms.current.gasConstant),
                     viscosity: f32(uniforms.current.viscosity),
                     mass: f32(uniforms.current.mass),
-                    dt: f32(uniforms.current.dt),
-                    boundaryLimit: f32(uniforms.current.boundaryLimit)
+                    dt: f32(uniforms.current.dt)
                 };
 
                 // Simulation steps
-                const groupCount: u32 = Math.ceil(currentParams.numParticles / 64);
+                const groupCountParticles: u32 = Math.ceil(currentParams.numParticles / 64);
+
+                const groupCountX: u32 = Math.ceil(GRID_RES_X / 4);
+                const groupCountY: u32 = Math.ceil(GRID_RES_Y / 4);
+                const groupCountZ: u32 = Math.ceil(GRID_RES_Z / 4);
+
+                // 1. Reset Grid
                 // @ts-ignore
-                await computeDensityPressure<[groupCount, 1, 1]>(pos, density, pressure, currentParams);
+                await resetGrid<[groupCountX, groupCountY, groupCountZ]>(gridHead, currentParams);
+
+                // 2. Update Grid (Insert particles)
                 // @ts-ignore
-                await computeForces<[groupCount, 1, 1]>(pos, vel, density, pressure, force, currentParams);
+                await updateGrid<[groupCountParticles, 1, 1]>(pos, gridHead, gridNext, currentParams);
+
+                // 3. Compute Density & Pressure
                 // @ts-ignore
-                await integrate<[groupCount, 1, 1]>(pos, vel, force, density, currentParams);
+                await computeDensityPressure<[groupCountParticles, 1, 1]>(pos, gridHead, gridNext, density, pressure, currentParams);
+
+                // 4. Compute Forces
+                // @ts-ignore
+                await computeForces<[groupCountParticles, 1, 1]>(pos, vel, gridHead, gridNext, density, pressure, force, currentParams);
+
+                // 5. Integrate
+                // @ts-ignore
+                await integrate<[groupCountParticles, 1, 1]>(pos, vel, force, density, currentParams);
 
                 // Render
                 runtime.clear([0.1, 0.1, 0.1, 1.0], 1.0);

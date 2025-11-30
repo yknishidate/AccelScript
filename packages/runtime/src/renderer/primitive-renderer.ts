@@ -418,6 +418,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                     usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
                     label: "Default rotation buffer",
                 });
+                console.log("Create default rotation buffer.");
                 // Zero initialized by default creation
             }
             rotationBuffer = this.defaultRotationBuffer;
