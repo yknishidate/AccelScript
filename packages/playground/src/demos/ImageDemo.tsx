@@ -29,7 +29,6 @@ async function generateImage(image: SharedArray<vec4f>, params: Params) {
     const g = 0.5 + 0.5 * sin(uv.y * 10.0 + params.time * 1.3);
     const b = 0.5 + 0.5 * sin((uv.x + uv.y) * 5.0 + params.time * 0.7);
 
-    // @ts-ignore
     image[idx] = vec4(r, g, b, 1.0);
 }
 
@@ -64,11 +63,9 @@ export default function ImageDemo() {
 
                 // Dispatch kernel
                 // 800 / 8 = 100, 600 / 8 = 75
-                // @ts-ignore
                 await generateImage<[100, 75, 1]>(image, params);
 
                 // Display image
-                // @ts-ignore
                 await runtime.showImage(image);
 
                 requestAnimationFrame(animate);

@@ -135,7 +135,7 @@ export class SharedArray<T = any> {
         if (!this.deviceBuffer || this.device !== device) {
             this.device = device;
             this.deviceBuffer = device.createBuffer({
-                size: this.hostData.byteLength,
+                size: Math.max(16, this.hostData.byteLength),
                 usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST,
                 mappedAtCreation: true
             });

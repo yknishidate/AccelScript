@@ -7,9 +7,7 @@ async function updatePositions(centers: SharedArray<vec2f>, velocities: SharedAr
     const i = global_invocation_id.x;
 
     // Update positions
-    // @ts-ignore
     let pos = centers[i];
-    // @ts-ignore
     let vel = velocities[i];
 
     pos = pos + vel * 0.01;
@@ -22,9 +20,7 @@ async function updatePositions(centers: SharedArray<vec2f>, velocities: SharedAr
         vel.y = -vel.y;
     }
 
-    // @ts-ignore
     centers[i] = pos;
-    // @ts-ignore
     velocities[i] = vel;
 }
 
@@ -55,11 +51,8 @@ export default function Circles() {
             const animate = async () => {
                 if (!animating) return;
 
-                // @ts-ignore
                 await updatePositions(centers, velocities);
-                // @ts-ignore
                 await runtime.clear([0.2, 0.2, 0.2, 1.0]);
-                // @ts-ignore
                 await runtime.circles(centers, radii, colors);
 
                 requestAnimationFrame(animate);

@@ -13,13 +13,16 @@ const uniformsSchema = {
     boundaryX: { value: 8.0, min: 0.5, max: 20.0, step: 0.1 },
     boundaryY: { value: 6.0, min: 0.5, max: 20.0, step: 0.1 },
     boundaryZ: { value: 2.5, min: 0.5, max: 20.0, step: 0.1 },
+    plateSpeed: { value: 2.0, min: 0.0, max: 10.0, step: 0.1 },
+    plateWidth: { value: 4.0, min: 0.1, max: 10.0, step: 0.1 },
+    plateThickness: { value: 0.2, min: 0.05, max: 1.0, step: 0.05 },
 };
 
 // SPH Parameters
 interface Params {
     gravity: vec4f;
-    boundaryLimit: vec4f; // Using vec4f for alignment safety
-    gridRes: vec4i; // Grid resolution (x, y, z, padding)
+    boundaryLimit: vec4f;
+    gridRes: vec4i;
     cellSize: f32;
     numParticles: u32;
     smoothingRadius: f32;
@@ -28,6 +31,9 @@ interface Params {
     viscosity: f32;
     mass: f32;
     dt: f32;
+    plateSpeed: f32;
+    plateAngle: f32;
+    plateSize: vec4f;
 }
 
 /** @device */
@@ -78,7 +84,6 @@ async function resetGrid(
     if (x >= u32(params.gridRes.x) || y >= u32(params.gridRes.y) || z >= u32(params.gridRes.z)) return;
 
     const index = x + y * u32(params.gridRes.x) + z * u32(params.gridRes.x) * u32(params.gridRes.y);
-    // @ts-ignore
     atomicStore(gridHead[index], -1);
 }
 
@@ -92,13 +97,10 @@ async function updateGrid(
     const i = global_invocation_id.x;
     if (i >= params.numParticles) return;
 
-    // @ts-ignore
     const p = pos[i];
     const cellIndex = getCellIndex(p, params.cellSize, params.gridRes, params.boundaryLimit.xyz);
 
-    // @ts-ignore
     const next = atomicExchange(gridHead[cellIndex], i32(i));
-    // @ts-ignore
     gridNext[i] = next;
 }
 
@@ -114,7 +116,6 @@ async function computeDensityPressure(
     const i = global_invocation_id.x;
     if (i >= params.numParticles) return;
 
-    // @ts-ignore
     const pi = pos[i];
     let d = 0.0;
 
@@ -135,11 +136,9 @@ async function computeDensityPressure(
                     nz >= 0 && nz < params.gridRes.z) {
 
                     const neighborCellIndex = nx + ny * params.gridRes.x + nz * params.gridRes.x * params.gridRes.y;
-                    // @ts-ignore
                     let j = atomicLoad(gridHead[neighborCellIndex]);
 
                     while (j != -1) {
-                        // @ts-ignore
                         const pj = pos[j];
                         const r = pi - pj;
                         const r2 = dot(r, r);
@@ -148,7 +147,6 @@ async function computeDensityPressure(
                             d = d + params.mass * poly6Kernel(r2, params.smoothingRadius);
                         }
 
-                        // @ts-ignore
                         j = gridNext[j];
                     }
                 }
@@ -156,9 +154,7 @@ async function computeDensityPressure(
         }
     }
 
-    // @ts-ignore
     density[i] = d;
-    // @ts-ignore
     pressure[i] = params.gasConstant * (d - params.restDensity);
 }
 
@@ -176,13 +172,9 @@ async function computeForces(
     const i = global_invocation_id.x;
     if (i >= params.numParticles) return;
 
-    // @ts-ignore
     const pi = pos[i];
-    // @ts-ignore
     const vi = vel[i];
-    // @ts-ignore
     const di = density[i];
-    // @ts-ignore
     const pri = pressure[i];
 
     let pressureForce = vec3f(0.0, 0.0, 0.0);
@@ -205,23 +197,17 @@ async function computeForces(
                     nz >= 0 && nz < params.gridRes.z) {
 
                     const neighborCellIndex = nx + ny * params.gridRes.x + nz * params.gridRes.x * params.gridRes.y;
-                    // @ts-ignore
                     let j = atomicLoad(gridHead[neighborCellIndex]);
 
                     while (j != -1) {
                         if (i == u32(j)) {
-                            // @ts-ignore
                             j = gridNext[j];
                             continue;
                         }
 
-                        // @ts-ignore
                         const pj = pos[j];
-                        // @ts-ignore
                         const vj = vel[j];
-                        // @ts-ignore
                         const dj = density[j];
-                        // @ts-ignore
                         const prj = pressure[j];
 
                         const r = pi - pj;
@@ -235,7 +221,6 @@ async function computeForces(
                             viscosityForce = viscosityForce + (vj - vi) * (lap * (params.mass / dj));
                         }
 
-                        // @ts-ignore
                         j = gridNext[j];
                     }
                 }
@@ -245,7 +230,6 @@ async function computeForces(
 
     viscosityForce = viscosityForce * params.viscosity;
 
-    // @ts-ignore
     force[i] = pressureForce + viscosityForce + params.gravity.xyz * di; // Gravity applied as body force density
 }
 
@@ -260,13 +244,9 @@ async function integrate(
     const i = global_invocation_id.x;
     if (i >= params.numParticles) return;
 
-    // @ts-ignore
     let p = pos[i];
-    // @ts-ignore
     let v = vel[i];
-    // @ts-ignore
     const f = force[i];
-    // @ts-ignore
     const d = density[i];
 
     // Update velocity
@@ -288,9 +268,50 @@ async function integrate(
     if (p.z < -limit.z) { p.z = -limit.z; v.z = v.z * damping; }
     if (p.z > limit.z) { p.z = limit.z; v.z = v.z * damping; }
 
-    // @ts-ignore
+    // Plate Collision
+    const plateAngle = params.plateAngle;
+    const cosA = cos(plateAngle);
+    const sinA = sin(plateAngle);
+
+    const localX = p.x * cosA + p.y * sinA;
+    const localY = -p.x * sinA + p.y * cosA;
+    const localZ = p.z;
+
+    const halfW = params.plateSize.x * 0.5; // Width (local X)
+    const halfH = params.plateSize.y * 0.5; // Thickness (local Y)
+    const halfD = params.plateSize.z * 0.5; // Depth (local Z) - boundsZ
+
+    if (localX > -halfW && localX < halfW &&
+        localY > -halfH && localY < halfH &&
+        localZ > -halfD && localZ < halfD) {
+
+        const signY = sign(localY);
+        const pushY = signY * (halfH + 0.01); // Push slightly outside
+
+        // New local position
+        const newLocalX = localX;
+        const newLocalY = pushY;
+        const newLocalZ = localZ;
+
+        p.x = newLocalX * cosA - newLocalY * sinA;
+        p.y = newLocalX * sinA + newLocalY * cosA;
+        p.z = newLocalZ;
+
+        const omega = params.plateSpeed;
+        const plateVelX = -omega * p.y;
+        const plateVelY = omega * p.x;
+        const plateVelZ = 0.0;
+
+        const normalX = -sinA * signY;
+        const normalY = cosA * signY;
+
+        // Set to plate velocity + push
+        v.x = plateVelX + normalX * 2.0;
+        v.y = plateVelY + normalY * 2.0;
+        v.z = plateVelZ;
+    }
+
     pos[i] = p;
-    // @ts-ignore
     vel[i] = v;
 }
 
@@ -374,7 +395,11 @@ export default function Fluid3D() {
                 force.set(i, [0.0, 0.0, 0.0]);
 
                 sizes.set(i, [0.07, 0.07, 0.07]);
-                colors.set(i, [0.2, 0.5, 1.0]);
+                if (i < NUM_PARTICLES * 0.5) {
+                    colors.set(i, [1.0, 0.5, 0.2]);
+                } else {
+                    colors.set(i, [0.2, 0.5, 1.0]);
+                }
 
                 gridNext.set(i, [-1]);
             }
@@ -386,11 +411,11 @@ export default function Fluid3D() {
                 await force.syncToDevice(runtime.device);
                 await gridHead.syncToDevice(runtime.device);
                 await gridNext.syncToDevice(runtime.device);
-                // density and pressure are computed on GPU, no need to sync
             }
 
             let frameCount = 0;
             let lastFpsTime = performance.now();
+            let currentPlateAngle = 0.0;
 
             const animate = async () => {
                 if (!animating) return;
@@ -407,6 +432,10 @@ export default function Fluid3D() {
                     lastFpsTime = now;
                 }
 
+                // Update plate angle
+                const dt = uniforms.current.dt;
+                currentPlateAngle += uniforms.current.plateSpeed * dt;
+
                 // Update params from uniforms
                 const currentParams = {
                     gravity: vec4f(0.0, -9.8, 0.0, 0.0),
@@ -419,39 +448,34 @@ export default function Fluid3D() {
                     gasConstant: f32(uniforms.current.gasConstant),
                     viscosity: f32(uniforms.current.viscosity),
                     mass: f32(uniforms.current.mass),
-                    dt: f32(uniforms.current.dt)
+                    dt: f32(dt),
+                    plateSpeed: f32(uniforms.current.plateSpeed),
+                    plateAngle: f32(currentPlateAngle),
+                    plateSize: vec4f(uniforms.current.plateWidth * 2.0, uniforms.current.plateThickness * 2.0, uniforms.current.boundaryZ * 2.0, 0.0)
                 };
 
                 // Simulation steps
                 const groupCountParticles: u32 = Math.ceil(currentParams.numParticles / 64);
-
                 const groupCountX: u32 = Math.ceil(GRID_RES_X / 4);
                 const groupCountY: u32 = Math.ceil(GRID_RES_Y / 4);
                 const groupCountZ: u32 = Math.ceil(GRID_RES_Z / 4);
 
-                // 1. Reset Grid
-                // @ts-ignore
                 await resetGrid<[groupCountX, groupCountY, groupCountZ]>(gridHead, currentParams);
-
-                // 2. Update Grid (Insert particles)
-                // @ts-ignore
                 await updateGrid<[groupCountParticles, 1, 1]>(pos, gridHead, gridNext, currentParams);
-
-                // 3. Compute Density & Pressure
-                // @ts-ignore
                 await computeDensityPressure<[groupCountParticles, 1, 1]>(pos, gridHead, gridNext, density, pressure, currentParams);
-
-                // 4. Compute Forces
-                // @ts-ignore
                 await computeForces<[groupCountParticles, 1, 1]>(pos, vel, gridHead, gridNext, density, pressure, force, currentParams);
-
-                // 5. Integrate
-                // @ts-ignore
                 await integrate<[groupCountParticles, 1, 1]>(pos, vel, force, density, currentParams);
 
-                // Render
                 runtime.clear([0.1, 0.1, 0.1, 1.0], 1.0);
                 runtime.spheres(pos, sizes, colors, { camera });
+
+                // Render Plate
+                runtime.box(
+                    [0, 0, 0],
+                    [uniforms.current.plateWidth, uniforms.current.plateThickness, boundsZ * 2.0],
+                    [0.8, 0.8, 0.8, 1.0],
+                    { camera, rotation: [0, 0, currentPlateAngle] }
+                );
 
                 requestAnimationFrame(animate);
             };
@@ -491,8 +515,7 @@ export default function Fluid3D() {
                 schema={schema}
                 values={uiValues}
                 onChange={setUniform}
-                // style={{ left: 'auto', right: '10px' }}
-                style={{ left: '10px', top: '60px' }}
+                style={{ left: '10px', top: '50px' }}
             />
             <canvas
                 ref={canvasRef}
