@@ -28,7 +28,7 @@ describe('SharedArray', () => {
         const arr = new SharedArray(vec3f, 2);
         expect(arr.size).toBe(2);
         expect(arr.data).toBeInstanceOf(Float32Array);
-        expect(arr.data.length).toBe(6); // 2 * 3 floats
+        expect(arr.data.length).toBe(8); // 2 * 4 floats (padding)
     });
 
     it('should initialize with vec4f', () => {
@@ -77,11 +77,13 @@ describe('SharedArray', () => {
         expect(arr.data[1]).toBe(2.0);
         expect(arr.data[2]).toBe(3.0);
 
+        // [3] is padding
+
         // Assign using Array
         arr.set(1, [4.0, 5.0, 6.0]);
-        expect(arr.data[3]).toBe(4.0);
-        expect(arr.data[4]).toBe(5.0);
-        expect(arr.data[5]).toBe(6.0);
+        expect(arr.data[4]).toBe(4.0);
+        expect(arr.data[5]).toBe(5.0);
+        expect(arr.data[6]).toBe(6.0);
 
         // Assign using vec3f() constructor
         arr.set(0, vec3f(7.0, 8.0, 9.0));
