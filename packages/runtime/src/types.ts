@@ -195,7 +195,7 @@ declare global {
     // ========================================================================
     // Atomics
     // ========================================================================
-    type Atomic<T> = T;
+    export type Atomic<T> = T;
 
     function atomicLoad(ptr: Atomic<u32> | Atomic<i32>): u32 | i32;
     function atomicStore(ptr: Atomic<u32> | Atomic<i32>, value: u32 | i32): void;

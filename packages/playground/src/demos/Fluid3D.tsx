@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { runtime, SharedArray, vec3f, vec4f, vec4i, f32, i32, u32, Camera, SyncMode, Atomic } from "@accelscript/runtime";
+import { runtime, SharedArray, vec3f, vec4f, vec4i, f32, i32, u32, Camera, SyncMode } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
 import { useUniforms, UniformControls } from '../hooks/useUniforms';
 import { useFps } from '../hooks/useFps';

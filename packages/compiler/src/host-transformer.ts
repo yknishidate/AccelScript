@@ -94,12 +94,8 @@ function collectDeviceFunctions(sourceFile: SourceFile): string {
 
         if (isDevice) {
             wgsl += generateDeviceFunction(func) + "\n\n";
-            // Remove the device function from the output JS/TS as it's only for WGSL
-            // Or keep it? If it's pure logic it might be useful on CPU too?
-            // For now, let's keep it but maybe we should comment it out or something?
-            // Actually, if it's used in kernel, it shouldn't be called from CPU directly usually.
-            // But for shared logic it might be useful.
-            // Let's leave it as is for now.
+            // Remove the device function from the output JS/TS
+            func.remove();
         }
     }
 
