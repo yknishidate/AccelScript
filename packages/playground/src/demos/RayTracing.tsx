@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { runtime, SharedArray, vec4f, f32, Camera } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
+import { useFps } from '../hooks/useFps';
 
 interface Params {
     radius: f32;
@@ -53,7 +54,6 @@ interface HitResult {
 
 /** @device */
 function intersectScene(ro: vec3, rd: vec3): HitResult {
-    // @ts-ignore
     let result: HitResult;
     result.t = -1.0;
     result.normal = vec3(0.0, 0.0, 0.0);
@@ -167,7 +167,6 @@ async function compute(image: SharedArray<vec4f>, params: Params) {
         let scatterDir = vec3(0.0, 0.0, 0.0);
         if (hitResult.matType == 0.0) { // Diffuse
             scatterDir = hitResult.normal + randomInUnitSphere(seed + vec2(f32(i), f32(i)));
-            // @ts-ignore
             if (length(scatterDir) < 0.001) scatterDir = hitResult.normal;
         } else if (hitResult.matType == 1.0) { // Metal
             let reflected = reflect(curRd, hitResult.normal);
@@ -182,7 +181,6 @@ async function compute(image: SharedArray<vec4f>, params: Params) {
     // Accumulation
     let finalColor = col;
     if (params.frame > 1) {
-        // @ts-ignore
         let prevColor = image[idx];
         // Convert back to linear space (undo gamma)
         let prevLinear = vec3(prevColor.x * prevColor.x, prevColor.y * prevColor.y, prevColor.z * prevColor.z);
@@ -194,12 +192,12 @@ async function compute(image: SharedArray<vec4f>, params: Params) {
     // Gamma correction
     finalColor = sqrt(finalColor);
 
-    // @ts-ignore
     image[idx] = vec4(finalColor.x, finalColor.y, finalColor.z, 1.0);
 }
 
 export default function RayTracing() {
     const { canvasRef, isReady } = useCanvas();
+    const { fpsRef, trackFrame, style: fpsStyle } = useFps();
 
     useEffect(() => {
         if (!isReady) return;
@@ -241,12 +239,12 @@ export default function RayTracing() {
 
                 // Dispatch kernel
                 // 800 / 8 = 100, 600 / 8 = 75
-                // @ts-ignore
                 await compute<[100, 75, 1]>(image, params);
 
                 // Display image
-                // @ts-ignore
                 await runtime.showImage(image);
+
+                trackFrame();
 
                 frameCount++;
                 requestAnimationFrame(render);
@@ -264,6 +262,12 @@ export default function RayTracing() {
 
     return (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <div
+                ref={fpsRef}
+                style={fpsStyle}
+            >
+                FPS: 0
+            </div>
             <canvas
                 ref={canvasRef}
                 width={800}

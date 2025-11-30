@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { runtime, SharedArray, vec3f, vec4f, vec4i, f32, i32, u32, Camera, SyncMode, Atomic } from "@accelscript/runtime";
 import { useCanvas } from '../hooks/useCanvas';
 import { useUniforms, UniformControls } from '../hooks/useUniforms';
+import { useFps } from '../hooks/useFps';
 
 const uniformsSchema = {
     smoothingRadius: { value: 0.4, min: 0.2, max: 1.0, step: 0.05 },
@@ -317,7 +318,7 @@ async function integrate(
 
 export default function Fluid3D() {
     const { canvasRef, isReady } = useCanvas();
-    const fpsRef = useRef<HTMLDivElement>(null);
+    const { fpsRef, trackFrame, style: fpsStyle } = useFps();
     const { uniforms, uiValues, setUniform, schema } = useUniforms(uniformsSchema);
 
     useEffect(() => {
@@ -413,24 +414,13 @@ export default function Fluid3D() {
                 await gridNext.syncToDevice(runtime.device);
             }
 
-            let frameCount = 0;
-            let lastFpsTime = performance.now();
             let currentPlateAngle = 0.0;
 
             const animate = async () => {
                 if (!animating) return;
 
                 // FPS Calculation
-                const now = performance.now();
-                frameCount++;
-                if (now - lastFpsTime >= 1000) {
-                    const fps = Math.round((frameCount * 1000) / (now - lastFpsTime));
-                    if (fpsRef.current) {
-                        fpsRef.current.innerText = `FPS: ${fps}`;
-                    }
-                    frameCount = 0;
-                    lastFpsTime = now;
-                }
+                trackFrame();
 
                 // Update plate angle
                 const dt = uniforms.current.dt;
@@ -495,19 +485,7 @@ export default function Fluid3D() {
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
             <div
                 ref={fpsRef}
-                style={{
-                    position: 'absolute',
-                    top: '10px',
-                    left: '10px',
-                    color: 'white',
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                    padding: '5px 10px',
-                    borderRadius: '4px',
-                    pointerEvents: 'none',
-                    fontFamily: 'monospace',
-                    fontSize: '14px',
-                    zIndex: 10
-                }}
+                style={fpsStyle}
             >
                 FPS: 0
             </div>
