@@ -40,12 +40,6 @@ function alphaBlend34(back: vec3f, front: vec4f): vec3f {
 }
 
 /** @device */
-function tanh_approx(x: f32): f32 {
-    const x2 = x * x;
-    return clamp(x * (27.0 + x2) / (27.0 + 9.0 * x2), -1.0, 1.0);
-}
-
-/** @device */
 function hash1(co: f32): f32 {
     return fract(sin(co * 12.9898) * 13758.5453);
 }
@@ -171,7 +165,7 @@ function plane(ro: vec3f, rd: vec3f, pp: vec3f, npp: vec3f, off: vec3f, n: f32):
 
     const df = exp(-0.1 * (distance(ro, pp) - 2.0));
     const acol = HSV2RGB(vec3(mix(0.9, 0.6, df), 0.9, mix(1.0, 0.0, df)));
-    const gcol = HSV2RGB(vec3(0.6, 0.5, tanh_approx(exp(-mix(2.0, 8.0, df) * lod))));
+    const gcol = HSV2RGB(vec3(0.6, 0.5, tanh(exp(-mix(2.0, 8.0, df) * lod))));
 
     let col = vec3(0.0, 0.0, 0.0);
     col += acol;
@@ -244,9 +238,35 @@ function moon(ro: vec3f, rd: vec3f, time: f32): vec4f {
     const mnor = normalize(mpos - mdim.xyz);
     const mdif = max(dot(ldir, mnor), 0.0);
     const mf = smoothstep(0.0, 10000.0, md.y - md.x);
+    const mfre = 1.0 + dot(rd, mnor);
+    const imfre = 1.0 - mfre;
 
-    let col = vec3(0.0, 0.0, 0.0);
-    col += mdif * mcol0 * 4.0;
+    let col = mdif * mcol0 * 4.0;
+
+    let fcol = vec3(0.0);
+    let msp = toSpherical(-mnor.zxy).yz;
+    let omsp = msp;
+    let msf = sin(msp.x);
+    msp.x -= PI * 0.5;
+    const mszy = (TAU / (4.0)) * 0.125;
+    let msny = mod1(msp.y, mszy);
+    msp.y = msny.y * msf;
+
+    const limit: i32 = 1;
+    for (let i = -limit; i <= limit; i++) {
+        let pp = msp + vec2(0.0, mszy * f32(i));
+        let d0 = abs(pp.y);
+        let fft = 0.1;
+        let d1 = length(pp) - 0.05 * fft;
+        let h = mix(0.66, 0.99, fft);
+        let mcol1 = HSV2RGB(vec3(h, 0.55, 1.0));
+        let mcol2 = HSV2RGB(vec3(h, 0.85, 1.0));
+        fcol += mcol1 * 0.5 * tanh(0.0025 / max(d0, 0.0)) * imfre * pow(msf, mix(100.0, 10.0, fft));
+        fcol += mcol2 * 5.0 * tanh(0.00025 / (max(d1, 0.0) * max(d1, 0.0))) * imfre * msf;
+    }
+    let d0 = abs(msp.x);
+    fcol += mcol3 * 0.5 * tanh(0.0025 / max(d0, 0.0)) * imfre;
+    col += fcol * smoothstep(18.0, 18.0 + 6.0 + 2.0 * abs(omsp.y), time);
 
     return vec4(col, mf);
 }
@@ -277,7 +297,6 @@ function skyColor(ro: vec3f, rd: vec3f, time: f32): vec3f {
 
 /** @device */
 function color(ww: vec3f, uu: vec3f, vv: vec3f, ro: vec3f, p: vec2f, time: f32, resolution: vec2f): vec3f {
-    const lp = length(p);
     const np = p + 2.0 / resolution.y;
     const rdd = 2.0;
 
@@ -310,7 +329,6 @@ function color(ww: vec3f, uu: vec3f, vv: vec3f, ro: vec3f, p: vec2f, time: f32, 
 
             let pcol = plane(ro, rd, pp, npp, off, nz + f32(i));
 
-            const nz_local = pp.z - ro.z;
             const fadeIn = smoothstep(maxDist, fadeDist, pd);
             pcol = vec4(mix(skyCol, pcol.xyz, fadeIn), pcol.w);
             pcol = clamp(pcol, vec4(0.0), vec4(1.0));
