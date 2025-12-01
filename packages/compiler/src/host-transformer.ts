@@ -17,6 +17,11 @@ export function transformHost(sourceFile: SourceFile) {
 
     // Transform kernel, vertex, and fragment functions
     transformShaderFunctions(sourceFile, deviceFunctionsWGSL);
+
+    // Remove device functions from host code
+    // This must be done AFTER transformShaderFunctions because that function
+    // (via generateWGSL) needs to inspect device functions to find struct dependencies
+    removeDeviceFunctions(sourceFile);
 }
 
 /**
@@ -94,12 +99,33 @@ function collectDeviceFunctions(sourceFile: SourceFile): string {
 
         if (isDevice) {
             wgsl += generateDeviceFunction(func) + "\n\n";
-            // Remove the device function from the output JS/TS
-            func.remove();
         }
     }
 
     return wgsl;
+}
+
+/**
+ * Remove all functions marked with @device from the source file
+ */
+function removeDeviceFunctions(sourceFile: SourceFile) {
+    // Get functions again as the list might have changed during transformation (though unlikely for top-level funcs)
+    // We need to collect them first before removing to avoid iterator invalidation issues if any
+    const functions = sourceFile.getFunctions();
+    const deviceFunctions: FunctionDeclaration[] = [];
+
+    for (const func of functions) {
+        const jsDocs = func.getJsDocs();
+        const isDevice = jsDocs.some(doc => doc.getTags().some(tag => tag.getTagName() === "device"));
+
+        if (isDevice) {
+            deviceFunctions.push(func);
+        }
+    }
+
+    for (const func of deviceFunctions) {
+        func.remove();
+    }
 }
 
 /**
