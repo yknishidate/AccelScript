@@ -41,11 +41,11 @@ export class ImageRenderer {
                 const srcIdx = (y * width + x) * channels;
                 const dstIdx = (y * width + x) * 4;
 
-                // Copy RGB channels (values assumed to be in [0, 1] range)
-                rgbaData[dstIdx + 0] = Math.floor(array.data[srcIdx + 0] * 255);
-                rgbaData[dstIdx + 1] = Math.floor(array.data[srcIdx + 1] * 255);
-                rgbaData[dstIdx + 2] = Math.floor(array.data[srcIdx + 2] * 255);
-                rgbaData[dstIdx + 3] = channels === 4 ? Math.floor(array.data[srcIdx + 3] * 255) : 255;
+                // Copy RGB channels
+                rgbaData[dstIdx + 0] = Math.floor(Math.max(0.0, array.data[srcIdx + 0]) * 255);
+                rgbaData[dstIdx + 1] = Math.floor(Math.max(0.0, array.data[srcIdx + 1]) * 255);
+                rgbaData[dstIdx + 2] = Math.floor(Math.max(0.0, array.data[srcIdx + 2]) * 255);
+                rgbaData[dstIdx + 3] = channels === 4 ? Math.floor(Math.max(0.0, array.data[srcIdx + 3]) * 255) : 255;
             }
         }
 
