@@ -266,7 +266,7 @@ function moon(ro: vec3f, rd: vec3f, time: f32): vec4f {
     }
     let d0 = abs(msp.x);
     fcol += mcol3 * 0.5 * tanh(0.0025 / max(d0, 0.0)) * imfre;
-    col += fcol * smoothstep(18.0, 18.0 + 6.0 + 2.0 * abs(omsp.y), time);
+    col += fcol * smoothstep(18.0, 18.0 + 6.0 + 2.0 * abs(omsp.y), time * 4.0);
 
     return vec4(col, mf);
 }
