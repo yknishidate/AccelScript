@@ -388,7 +388,7 @@ async function generateImage(image: SharedArray<vec4f>, params: Params) {
     image[idx] = vec4(col.xyz, 1.0);
 }
 
-export default function ImageDemo() {
+export default function Shadertoy() {
     const { canvasRef, isReady } = useCanvas();
 
     useEffect(() => {

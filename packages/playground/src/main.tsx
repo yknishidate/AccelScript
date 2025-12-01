@@ -3,7 +3,7 @@ import ReactDOM from 'react-dom/client'
 import Triangle from './demos/Triangle.gen'
 import Circles from './demos/Circles.gen'
 import Lines from './demos/Lines.gen'
-import ImageDemo from './demos/ImageDemo.gen'
+import Shadertoy from './demos/Shadertoy.gen'
 import RayTracing from './demos/RayTracing.gen'
 
 import Fluid3D from './demos/Fluid3D.gen'
@@ -14,14 +14,14 @@ import { PrimitiveDemo } from './demos/PrimitiveDemo'
 import './index.css'
 
 function Layout() {
-    const [demo, setDemo] = useState<"triangle" | "circles" | "lines" | "image" | "raytracing" | "rectangles" | "primitives" | "fluid3d">("fluid3d");
+    const [demo, setDemo] = useState<"triangle" | "circles" | "lines" | "shadertoy" | "raytracing" | "rectangles" | "primitives" | "fluid3d">("shadertoy");
 
     const demos = [
         { id: "triangle", label: "Triangle", description: "Basic graphics rendering" },
         { id: "circles", label: "Circles", description: "Interactive particle system" },
         { id: "rectangles", label: "Rectangles", description: "Rectangle drawing demo" },
         { id: "lines", label: "Lines", description: "Line drawing demo" },
-        { id: "image", label: "Image Processing", description: "Image manipulation filters" },
+        { id: "shadertoy", label: "Shadertoy", description: "Neonwave sunrise shader port" },
         { id: "raytracing", label: "Ray Tracing", description: "Simple sphere ray tracing" },
         { id: "primitives", label: "Primitives", description: "Primitive rendering demo" },
         { id: "fluid3d", label: "Fluid 3D", description: "SPH Fluid Simulation" },
@@ -88,7 +88,7 @@ function Layout() {
                     {demo === "circles" && <Circles />}
                     {demo === "rectangles" && <Rectangles />}
                     {demo === "lines" && <Lines />}
-                    {demo === "image" && <ImageDemo />}
+                    {demo === "shadertoy" && <Shadertoy />}
                     {demo === "raytracing" && <RayTracing />}
                     {demo === "primitives" && <PrimitiveDemo />}
                     {demo === "fluid3d" && <Fluid3D />}
