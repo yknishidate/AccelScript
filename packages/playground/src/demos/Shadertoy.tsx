@@ -399,7 +399,7 @@ async function generateImage(image: SharedArray<vec4f>, params: Params) {
     p.x *= resolution.x / resolution.y;
 
     let col = effect(p, q, params.time, resolution);
-    col *= smoothstep(0.0, 8.0, params.time - abs(q.y));
+    col *= smoothstep(0.0, 8.0, params.time * 4.0 - abs(q.y));
     col = aces_approx(col);
     col = sRGB3(col);
 
