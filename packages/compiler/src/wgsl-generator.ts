@@ -24,6 +24,7 @@ class WGSLGenerator {
 
         const structDefs = this.generateStructDefinitions();
         const bindings = this.generateBindings();
+        const constants = this.generateGlobalConstants();
 
         let body = "";
         const bodyBlock = this.func.getBody();
@@ -33,7 +34,7 @@ class WGSLGenerator {
 
         const { prefix, signature, returnType } = this.getShaderSignature();
 
-        return `${structDefs}${bindings}
+        return `${structDefs}${bindings}${constants}
 ${prefix}
 fn ${name}(${signature}) ${returnType} {
 ${body}
@@ -145,6 +146,35 @@ ${body}
             bindings += `@group(0) @binding(${index}) var<${bindingType}> ${n} : ${type};\n`;
         });
         return bindings;
+    }
+
+    private generateGlobalConstants(): string {
+        const sourceFile = this.func.getSourceFile();
+        let constants = "";
+
+        sourceFile.getVariableStatements().forEach(stmt => {
+            const declList = stmt.getDeclarationList();
+            if (declList.getDeclarationKind() === VariableDeclarationKind.Const) {
+                declList.getDeclarations().forEach(decl => {
+                    const name = decl.getName();
+                    const init = decl.getInitializer();
+                    // Only emit if it has an initializer and is top-level (which getVariableStatements returns)
+                    if (init) {
+                        const kind = init.getKind();
+                        // Ignore objects and arrays
+                        if (kind === SyntaxKind.ObjectLiteralExpression || kind === SyntaxKind.ArrayLiteralExpression) {
+                            return;
+                        }
+
+                        const typeNode = decl.getTypeNode();
+                        const typeAnnotation = typeNode ? `: ${this.mapType(typeNode.getText())}` : '';
+                        constants += `const ${name}${typeAnnotation} = ${this.visitNode(init)};\n`;
+                    }
+                });
+            }
+        });
+
+        return constants;
     }
 
     private getShaderSignature(): { prefix: string, signature: string, returnType: string } {
